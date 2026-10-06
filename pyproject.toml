@@ -1,14 +1,14 @@
 [project]
 name = "execbench"
-version = "0.1.0"
+version = "0.2.0"
 description = "ExecBench: an Inspect benchmark of AI agents executing large orders under market constraints"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-dependencies = ["inspect-ai>=0.3.100"]
+dependencies = ["inspect-ai==0.3.276"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "matplotlib"]
 
 [project.entry-points.inspect_ai]
 execbench = "execbench._registry"

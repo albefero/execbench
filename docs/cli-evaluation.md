@@ -27,6 +27,10 @@ agent said, not a measurement of its internal reasoning.
 
 ## Preconditions
 
+The CLI transport is validated on Linux with Python 3.11. Timeouts terminate
+the process group on Linux. The current Windows fallback terminates only the
+parent process, so equivalent cleanup is not established there.
+
 - Install ExecBench with `pip install -e '.[dev]'` or the equivalent `uv pip`
   command inside a virtual environment.
 - Install the CLIs and log in through their normal authentication flows.
@@ -76,10 +80,11 @@ in the manifest and can be selected explicitly with `--call-timeout` and
 `--sample-time-limit`. The benchmark's 160-message limit is unchanged.
 
 Independent runner processes may evaluate different CLI providers concurrently.
-The core experiment uses one process for the three Claude models in sequence
-and another for Codex, each with one active sample and one model call. Their
-manifests must identify the same source commit, source hash and Inspect version
-before their results can be combined.
+The core experiment permits at most one Claude runner and one Codex runner at
+a time, each with one active sample and one model call. Each model can have its
+own completed manifest, so a later interruption cannot obscure an earlier
+completed run. Their manifests must identify the same source commit, source
+hash and Inspect version before their results can be combined.
 
 Three epochs repeat the same six seeded markets. They measure variation
 between model executions on those markets, not generalisation to 18
@@ -121,9 +126,14 @@ These controls require an end-to-end smoke test with the installed CLI
 versions before publishing results. Unit tests of command construction do
 not establish that a particular CLI build enforces every option.
 
-A failed CLI call is an evaluation error, not a zero score. The runner stops
-on errors rather than selecting a different model or retrying a failed
-decision silently. A sample hitting a time limit or any limit other than the
+A failed CLI call is an evaluation error, not a zero score. ExecBench and
+Inspect do not retry failed decisions or samples: the runner stops on errors.
+A CLI may internally retry a transient API request before returning its final
+decision. Claude's validated `system/api_retry` notification records this
+transport behaviour; it does not authorise model fallbacks or native actions.
+Its retry metadata and the final response remain in the raw log, and the
+180-second process timeout includes internal backoff and retries.
+A sample hitting a time limit or any limit other than the
 benchmark's message limit makes the run incomplete; it cannot become a published
 score for a completed run. Message-limited samples retain their scores and are
 listed by scenario and epoch in the manifest. All limited samples remain in the
@@ -160,6 +170,37 @@ The scorer's historical zero placeholders for no-fill shortfall are not
 economic observations. Results analysis must use the explanation's `null`
 values to exclude those runs from cost means and report their count. Positive
 `vs_twap_bps` means cheaper execution than TWAP.
+
+### Analysing completed runs
+
+Select successful core manifests explicitly; do not include smoke checks or
+interrupted attempts. For an experiment split between two provider processes:
+
+```bash
+python scripts/results_table.py \
+  logs/cli-core/CLAUDE_RUN/run-manifest.json \
+  logs/cli-core/CODEX_RUN/run-manifest.json
+```
+
+Replace the two run names with the completed directories. The script reads
+Inspect logs through `read_eval_log`, checks the 18 scenario/epoch pairs for
+each model, and verifies that source and protocol metadata agree. It writes
+`results/results.md`, `results/summary.json` and a grouped-bar PNG. Re-running
+it with the same logs and plotting environment produces identical bytes.
+
+The table reports the mean score with the standard error of the three
+whole-suite epoch means. With only three repeats, this is a limited estimate
+of repeat variability on the same fixed markets. The JSON also preserves
+the separate across-scenario SEM and per-sample metrics. These quantities
+do not establish generalisation to other markets or statistically significant
+differences between models.
+
+The experimental commit is recorded independently of later documentation and
+results commits. The v0.2 extension preserves the six core definitions, scoring
+formula, and all 12 core reference-policy action lists and metrics. Reproducing
+the historical experiment requires its recorded commit and Inspect/CLI
+versions, not just the latest checkout. Earlier smoke checks and interrupted
+attempts are excluded from the published experiment.
 
 References: [Inspect model providers](https://inspect.aisi.org.uk/extensions-model-api.html),
 [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode),

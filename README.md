@@ -2,7 +2,7 @@
 
 An [Inspect](https://inspect.aisi.org.uk/) benchmark that measures how well AI agents execute a large order in a market with limited liquidity, price impact and hard rules.
 
-Most agent benchmarks test whether a model can find an answer. ExecBench tests something closer to economic work: acting over many steps with money at stake, where every action changes the environment and some mistakes cannot be undone. The task is one that trading desks solve every day and that has a standard, well-understood yardstick (implementation shortfall against TWAP), which makes results easy to interpret.
+The agent must balance completion, execution cost and hard constraints over a sequence of decisions. Markets are synthetic and seeded; every trade and rejection can be reproduced from the action log. Implementation shortfall measures cost relative to the initial mid price; comparison with a time-weighted average price (TWAP) policy provides a reference for execution quality.
 
 ## The task
 
@@ -12,9 +12,13 @@ The agent must buy a fixed quantity of an asset within a fixed number of time st
 - `buy(quantity, limit_price)` sends an immediate-or-cancel order that walks the book from the best ask upwards.
 - `advance()` moves to the next step. The book refreshes; the agent cannot go back.
 
+A separate `submit()` action ends the agent's run with a short summary.
+
 Buying consumes liquidity for the current step (temporary impact) and pushes future prices up (permanent impact). The mid price also follows an exogenous random walk the agent does not control. Scenarios add hard rules: blackout steps, a maximum price, a total budget. Breaking a rule rejects the order and counts as a violation.
 
-## Scenarios (v0)
+## Scenarios
+
+The six original **core** scenarios remain fixed:
 
 | Scenario | What it tests |
 |---|---|
@@ -25,9 +29,18 @@ Buying consumes liquidity for the current step (temporary impact) and pushes fut
 | `tight_budget` | Budget barely covers the target. Overpaying means not completing. |
 | `trending_up` | Upward drift. Adapting and buying earlier than TWAP pays off. |
 
+Version 0.2 adds **30 generated** scenarios and **10 held-out** scenarios with
+separate fixed seeds. They vary liquidity, impact, volatility, drift, blackout
+windows, price caps and budgets. The held-out set is reserved for evaluation;
+its outcomes are not used to choose parameters. Select a set with
+`-T scenarios=core`, `generated`, `heldout` or `all`; the default remains `core`.
+Published core results do not imply that models have been evaluated on these
+additional scenarios. See [the generation protocol](docs/scenario-generation.md)
+for parameter ranges and seed rules.
+
 ## Scoring
 
-Execution quality is measured with implementation shortfall, the average price paid versus the mid price at step 0, in basis points. Each agent run is compared with a TWAP executed on the same scenario and the same exogenous price path, so luck in the random walk cancels out.
+Execution quality is measured with implementation shortfall, the average price paid versus the mid price at step 0, in basis points. Each agent run is compared with TWAP on the same seeded exogenous price path. This controls for differences between market paths; execution timing and the agent's own price impact still affect the outcome.
 
 ```
 score      = completion * cost_score * 0.75 ** violations
@@ -65,6 +78,9 @@ inspect eval execbench/task.py@execbench --model anthropic/claude-sonnet-5
 inspect eval execbench/task.py@execbench_baseline -T policy=twap --model mockllm/model
 inspect eval execbench/task.py@execbench_baseline -T policy=dump --model mockllm/model
 
+# generated scenarios, using the same agent and scoring rules
+inspect eval execbench/task.py@execbench -T scenarios=generated --model anthropic/claude-sonnet-5
+
 # tests
 pytest
 ```
@@ -100,20 +116,42 @@ contains scripted policies only.
 ## Design choices
 
 - **Deterministic simulator, replayed from an action log.** The market is never held in memory between tool calls. Every call rebuilds it by replaying the agent's actions from the per-sample store. This keeps the implementation stateless, makes every run exactly reproducible, and turns the Inspect transcript into a complete audit trail.
-- **Same exogenous path for agent and baseline.** Comparing against TWAP on the identical random walk isolates execution skill from market luck.
+- **Same exogenous path for agent and baseline.** Both policies face the same seeded external price path. This controls for differences between paths; the selected scenarios and seeds still affect the comparison.
 - **Violations are counted on attempts, not only on outcomes.** An order that would break a rule is rejected before it touches the book. This measures whether the agent reads and respects constraints, which matters as much as price for any agent trusted with money.
-- **Temporary impact dominates permanent impact.** Walking the book is more expensive than the permanent drift your own buying causes, which is the regime observed in practice and the one in which splitting an order is worth it.
+- **Explicit synthetic market assumptions.** The scenarios include regimes where walking the book makes immediate execution expensive, alongside cases where buying early helps. Their parameters are not calibrated to a real exchange.
 - **One documented scale constant.** `COST_SCALE_BPS = 10` is fixed across scenarios and not tuned per scenario.
 
 ## Limitations and roadmap
 
-v0 is deliberately small. Planned for v1:
+The core comparison covers six fixed market paths. Repeating model executions
+estimates variation on those paths; it does not create additional independent
+markets. CLI results also include each CLI's system instructions, defaults and
+formatting behaviour. They should not be read as direct API results or evidence
+of profitable real-world trading.
 
-- 30 to 50 scenarios generated from parameter ranges, with held-out seeds
+The simulator has a single asset, buy orders, visible liquidity and discrete
+time steps. It omits fees, latency, queue position and competing traders. The
+score saturates when an agent matches or beats TWAP, so the uncapped
+`vs_twap_bps` metric is needed to distinguish better execution. Incomplete
+orders have cost statistics only for the quantity that actually traded.
+
+Future extensions:
+
 - sell-side execution and two-sided books with resting limit orders
 - partial observability (hidden liquidity, delayed data)
 - a human baseline from execution traders
 - multi-asset treasury management (TreasuryBench)
+
+## Reproducibility and citation
+
+The published experiment identifies its source commit, Inspect version,
+requested model identifiers and CLI versions in `results/summary.json`.
+Inspect is pinned to that version. Tests use scripted model outputs and require
+no API keys. Raw transcripts remain under the ignored `logs/` directory; only
+reviewed results and selected evidence are included in the repository.
+
+See [CITATION.cff](CITATION.cff) to cite the software and
+[the evaluation protocol](docs/cli-evaluation.md) for limits and provenance.
 
 ## Author
 

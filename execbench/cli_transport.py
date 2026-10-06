@@ -53,10 +53,15 @@ _CLAUDE_EVENT_SUBTYPES = {
         "error_max_structured_output_retries",
     }),
 }
-# Display-only system frames from the Claude Code 2.1.290 SDK schema. These
+# Telemetry system frames from the Claude Code 2.1.290 SDK schema. These
 # carry neither actions nor authoritative token usage. Required/optional field
-# types are checked without rejecting additional vendor envelope metadata.
+# types are checked; api_retry additionally uses the SDK's exact field allowlist.
 _CLAUDE_SYSTEM_TELEMETRY = {
+    "api_retry": (
+        {"attempt": int, "max_retries": int, "retry_delay_ms": int,
+         "error_status": (int, type(None)), "error": str},
+        {"no_response": dict},
+    ),
     "thinking_tokens": (
         {"estimated_tokens": int, "estimated_tokens_delta": int},
         {"user_message_uuid": str},
@@ -78,6 +83,12 @@ _CLAUDE_SYSTEM_TELEMETRY = {
         {"color": str, "timeout_ms": int},
     ),
 }
+_CLAUDE_RETRY_ERRORS = frozenset({
+    "authentication_failed", "oauth_org_not_allowed", "account_on_hold",
+    "verification_required", "billing_error", "rate_limit", "overloaded",
+    "invalid_request", "model_not_found", "server_error", "unknown",
+    "max_output_tokens", "cloud_credential_error",
+})
 _CODEX_DISABLED_FEATURES = (
     "shell_tool", "unified_exec", "code_mode", "code_mode_host", "apps",
     "plugins", "remote_plugin", "browser_use", "browser_use_external",
@@ -396,6 +407,17 @@ def _valid_claude_telemetry(event: dict, subtype: str) -> bool:
                 return False
         elif type(event[name]) not in (expected if isinstance(expected, tuple) else (expected,)):
             return False
+    if subtype == "api_retry":
+        # An internal HTTP retry notice is not an Inspect/sample retry. Accept
+        # only the installed SDK schema; the final result must still succeed.
+        if set(event) - {"type", "subtype", *required, *optional}:
+            return False
+        if event["error"] not in _CLAUDE_RETRY_ERRORS:
+            return False
+        if "no_response" in event:
+            detail = event["no_response"]
+            if set(detail) != {"waited_ms", "retry_wait_ms"} or any(type(value) is not int for value in detail.values()):
+                return False
     if any(name in event for name in ("tool_use_id", "tool_name", "tool_calls", "message")):
         return False
     if subtype == "status":

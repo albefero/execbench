@@ -1,7 +1,9 @@
 # Review notes
 
-This records changes made before real-model evaluation. The six core
-scenarios and the scoring formula remain unchanged.
+This records the evaluation fixes and the v0.2 extension. The six core
+scenarios and the scoring formula remain unchanged. The final comparison uses
+one frozen source commit; development checks and earlier interrupted attempts
+are kept separate from its results.
 
 ## Operational balances retain their precision
 
@@ -90,15 +92,51 @@ the model transport with a logged-in CLI invocation. The protocol documents
 the resulting limitations, provenance and validation gates. No credentials
 are extracted or stored in the project.
 
-QubicMM was reviewed as a private architectural reference. The transferable
-principle is that a model proposes actions while deterministic code enforces
-limits and records outcomes. No operational data or private source has been
-included in this repository.
+The design separates proposed actions from their execution: a model proposes,
+while deterministic code enforces limits and records outcomes. Operational
+data and private source from other projects are not included in this repository.
 
-## Finding retained for the generated-scenario stage
+## Generated-scenario extension
 
 `_affordable_qty` applies its 0.1% budget margin whenever available quantity
 is below the requested quantity, including some cases where liquidity or a
 price cap is the binding constraint. The six core reference results are not
-affected. This should be corrected and regression-tested before generating
-new combinations of budget, price and depth constraints.
+affected. The extension corrects this behaviour and adds focused regression
+tests for budget, depth and cap boundaries. Full action lists and all metrics
+for the 12 core/policy combinations were compared before and after the change
+and remain exactly equal.
+
+The additional 30 scenarios and 10 held-out scenarios use separate fixed
+seeds. The first generated distribution exceeded the predeclared 0.10
+TWAP–dump mean-score gap; no parameter or seed adjustment was needed. The
+held-out split was used only for integrity checks. See the
+[generation protocol](scenario-generation.md) for the ranges and limits.
+
+## Interrupted core attempt
+
+The Codex attempt `20261006T130110720321Z` stopped after four scored samples
+with a CLI exit classified as requested-model unavailability or lack of
+authorization. It is an incomplete experiment and is excluded in full from
+the aggregate comparison. A subsequent smoke check using the identical model
+and configuration succeeded. The replacement 18-sample attempt began at
+`20261006T131255536371Z`, on the same source commit and Inspect version.
+This recovery does not establish the provider-side cause of the interruption.
+
+The first Claude core batch completed Sonnet's 18 samples, then stopped after
+15 scored Opus samples when `price_cap`, epoch 3, returned a
+`system/api_retry` notification. The installed Claude 2.1.290 schema identifies
+this as a recoverable API-request retry. The adapter had rejected it as an
+unknown system event. The fix validates its documented fields and retains the
+notification while still requiring a successful final decision, consistent
+model identity and no unexpected native actions.
+
+Because this correction changes the evaluated source, the full comparison is
+restarted for all four models from the same new commit, including the v0.2
+extension. The earlier successful Sonnet and Codex runs are retained locally
+for audit but are excluded from the final comparison. No partial Opus scores
+are combined with a later run. Each new model run gets its own manifest.
+
+Inspect's `max_retries=0` prevents framework-level decision retries. It does
+not control HTTP retries inside a CLI executable. The documented CLI track
+includes that internal transport behaviour within the fixed process timeout;
+it must not be described as a protocol with no retries at any layer.

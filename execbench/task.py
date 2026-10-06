@@ -33,7 +33,7 @@ from inspect_ai.tool import tool
 from inspect_ai.util import store
 
 from execbench.baselines import run_policy
-from execbench.scenarios import SCENARIOS
+from execbench.generated import select_scenarios
 from execbench.scoring import evaluate
 from execbench.sim import MarketSim, Scenario
 
@@ -227,15 +227,15 @@ def execution_scorer():
 
 # ---------------------------------------------------------------- tasks
 
-def _dataset() -> MemoryDataset:
+def _dataset(scenarios: str = "core") -> MemoryDataset:
     return MemoryDataset([
         Sample(id=s.id, input=build_prompt(s), target="", metadata={"scenario": s.to_dict()})
-        for s in SCENARIOS
+        for s in select_scenarios(scenarios)
     ])
 
 
 @task
-def execbench(message_limit: int = 160) -> Task:
+def execbench(message_limit: int = 160, scenarios: str = "core") -> Task:
     agent = react(
         prompt=AgentPrompt(
             instructions=None,
@@ -245,7 +245,7 @@ def execbench(message_limit: int = 160) -> Task:
         submit=AgentSubmit(name="submit", description="Finish the task with a one-line summary."),
     )
     return Task(
-        dataset=_dataset(),
+        dataset=_dataset(scenarios),
         solver=[setup_market(), as_solver(agent)],
         scorer=execution_scorer(),
         message_limit=message_limit,
@@ -254,9 +254,9 @@ def execbench(message_limit: int = 160) -> Task:
 
 
 @task
-def execbench_baseline(policy: str = "twap") -> Task:
+def execbench_baseline(policy: str = "twap", scenarios: str = "core") -> Task:
     return Task(
-        dataset=_dataset(),
+        dataset=_dataset(scenarios),
         solver=[setup_market(), scripted_policy(policy)],
         scorer=execution_scorer(),
     )

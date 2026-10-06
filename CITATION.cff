@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use ExecBench in your research, please cite this software."
+type: software
+title: ExecBench
+version: 0.2.0
+date-released: "2026-10-06"
+authors:
+  - family-names: Albefero
+    website: https://www.linkedin.com/in/albefero
+abstract: >-
+  An Inspect benchmark of AI agents executing large orders under market
+  constraints. A deterministic simulator records actions and compares
+  execution quality with a TWAP reference policy.
+keywords:
+  - AI agents
+  - benchmark
+  - order execution
+  - Inspect AI
+license: MIT

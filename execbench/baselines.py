@@ -28,15 +28,20 @@ def _affordable_qty(sim: MarketSim, qty: float) -> float:
     money = s.budget - sim.cash_spent
     limit = s.max_price if s.max_price is not None else float("inf")
     take_total = 0.0
+    budget_binds = False
     for price, size in sim.ask_levels():
-        if price > limit or take_total >= qty or money <= 0:
+        if price > limit or take_total >= qty:
             break
-        take = min(size, qty - take_total, money / price)
+        available = min(size, qty - take_total)
+        affordable = max(money, 0.0) / price
+        budget_binds = budget_binds or available > affordable
+        take = min(available, affordable)
         take_total += take
         money -= take * price
     if take_total >= qty - 1e-9:
         return qty
-    return take_total * 0.999  # budget binds: small margin so rounding never breaches it
+    # Exhausting depth or reaching a price cap does not justify a budget margin.
+    return take_total * 0.999 if budget_binds else take_total
 
 
 def run_policy(scenario: Scenario, policy: str) -> list[dict]:

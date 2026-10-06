@@ -67,6 +67,15 @@ def claude_telemetry(subtype, **fields):
     }
 
 
+def claude_api_retry(**fields):
+    """Exact system/api_retry wire schema in Claude Code 2.1.290."""
+    return claude_telemetry(
+        "api_retry",
+        **{"attempt": 1, "max_retries": 10, "retry_delay_ms": 500,
+           "error_status": 529, "error": "overloaded", **fields},
+    )
+
+
 @pytest.fixture
 def fake_cli(monkeypatch):
     """A fake subprocess records argv/cwd/stdin; no executable is launched."""
@@ -118,7 +127,7 @@ def fake_cli(monkeypatch):
 def request(provider="codex", **kwargs):
     return transport.request_decision(
         provider, "requested-model", MESSAGES, TOOLS,
-        workspace_root=Path(__file__).resolve().parents[2], **kwargs,
+        workspace_root=Path(__file__).resolve().parents[1], **kwargs,
     )
 
 
@@ -161,7 +170,7 @@ def test_codex_success_has_fresh_context_and_deny_profile(fake_cli):
     assert 'model_reasoning_effort="medium"' in argv
     profile = next(arg for arg in argv if arg.startswith("permissions="))
     assert 'extends=":read-only"' in profile
-    assert f'"{Path(__file__).resolve().parents[2]}"="deny"' in profile
+    assert f'"{Path(__file__).resolve().parents[1]}"="deny"' in profile
     assert call["files"] == ["decision.schema.json"]
     assert call["options"]["start_new_session"] is True
     assert not Path(call["options"]["cwd"]).exists()
@@ -285,6 +294,96 @@ def test_claude_headless_telemetry_sequence_keeps_decision_and_billed_usage(fake
     assert result["raw_response"] == events
 
 
+@pytest.mark.parametrize("error", [
+    "authentication_failed", "oauth_org_not_allowed", "account_on_hold",
+    "verification_required", "billing_error", "rate_limit", "overloaded",
+    "invalid_request", "model_not_found", "server_error", "unknown",
+    "max_output_tokens", "cloud_credential_error",
+])
+def test_claude_api_retry_preserves_success_usage_and_raw_notice(fake_cli, error):
+    events = claude_events()
+    events.insert(1, claude_api_retry(error=error))
+    fake_cli(events)
+    result = asyncio.run(request("claude"))
+    assert result["action"] == "buy"
+    assert result["usage"] == events[-1]["usage"]
+    assert result["raw_response"] == events
+    assert result["observed_model"] == "claude-model-snapshot"
+
+
+def test_claude_api_retry_accepts_documented_optional_timeout_details(fake_cli):
+    # The SDK uses int(), without nonnegative bounds, and uuid is a string alias.
+    event = claude_api_retry(error_status=None, attempt=0, max_retries=-1,
+                            uuid="sdk-string-alias", no_response={"waited_ms": 30000, "retry_wait_ms": 500})
+    fake_cli([event, *claude_events()])
+    assert asyncio.run(request("claude"))["raw_response"][0] == event
+
+
+@pytest.mark.parametrize("field", [
+    "attempt", "max_retries", "retry_delay_ms", "error_status", "error", "uuid", "session_id",
+])
+def test_claude_api_retry_requires_every_sdk_field(fake_cli, field):
+    event = claude_api_retry()
+    del event[field]
+    fake_cli([event, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed or unsafe Claude telemetry"):
+        asyncio.run(request("claude"))
+
+
+@pytest.mark.parametrize("fields", [
+    {"attempt": True}, {"attempt": 1.5}, {"max_retries": "10"}, {"retry_delay_ms": None},
+    {"error_status": False}, {"error_status": 500.5}, {"error_status": "529"},
+    {"error": "private-new-error"}, {"error": None}, {"uuid": 1}, {"session_id": None},
+    {"no_response": None}, {"no_response": []}, {"no_response": {}},
+    {"no_response": {"waited_ms": 1}},
+    {"no_response": {"waited_ms": True, "retry_wait_ms": 10}},
+    {"no_response": {"waited_ms": 1, "retry_wait_ms": "10"}},
+    {"no_response": {"waited_ms": 1, "retry_wait_ms": 10, "private-extra": "secret"}},
+    {"usage": {"input_tokens": 123}}, {"private-extra": "secret"},
+    {"message": {"content": "secret"}}, {"model": "private-model"},
+])
+def test_claude_api_retry_rejects_malformed_or_undocumented_fields(fake_cli, fields):
+    fake_cli([claude_api_retry(**fields), *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed or unsafe Claude telemetry") as caught:
+        asyncio.run(request("claude"))
+    assert "private" not in str(caught.value)
+    assert "secret" not in str(caught.value)
+
+
+def test_claude_api_retry_does_not_accept_nonfinite_json(fake_cli):
+    fake_cli([claude_api_retry(retry_delay_ms=float("nan")), *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Non-finite"):
+        asyncio.run(request("claude"))
+
+
+def test_claude_api_retry_cannot_replace_final_success(fake_cli):
+    fake_cli([claude_api_retry(), *claude_events()[:-1]])
+    with pytest.raises(transport.CLITransportError, match="no completed"):
+        asyncio.run(request("claude"))
+
+
+def test_claude_api_retry_does_not_hide_final_failure(fake_cli):
+    events = [claude_api_retry(), *claude_events()]
+    events[-1] = {"type": "result", "subtype": "error_during_execution", "is_error": True}
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="failed request"):
+        asyncio.run(request("claude"))
+
+
+@pytest.mark.parametrize("activity", ["native_tool", "model_fallback", "changed_model"])
+def test_claude_api_retry_does_not_authorize_tools_or_model_changes(fake_cli, activity):
+    events = [claude_api_retry(), *claude_events()]
+    if activity == "native_tool":
+        events[2]["message"]["content"][0]["name"] = "Read"
+    elif activity == "model_fallback":
+        events.insert(2, {"type": "system", "subtype": "model_fallback"})
+    else:
+        events[2]["message"]["model"] = "different-model"
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError):
+        asyncio.run(request("claude"))
+
+
 @pytest.mark.parametrize("event", [
     claude_telemetry("status", status="compacting", compact_result="success", permissionMode="default"),
     claude_telemetry("thinking_tokens", estimated_tokens=3, estimated_tokens_delta=1, user_message_uuid="fixture"),
@@ -320,7 +419,7 @@ def test_claude_malformed_or_unsafe_telemetry_is_rejected(fake_cli, event):
 @pytest.mark.parametrize("subtype", [
     "model_fallback", "model_refusal_fallback", "hook_started", "hook_response",
     "stop_hook_summary", "task_started", "permission_retry", "informational",
-    "api_retry", "api_error", "compact_boundary",
+    "api_error", "compact_boundary",
 ])
 def test_claude_telemetry_does_not_allow_side_effects_or_recovery_events(fake_cli, subtype):
     fake_cli([claude_telemetry(subtype, content="secret"), *claude_events()])

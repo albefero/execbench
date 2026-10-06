@@ -7,7 +7,8 @@ price at the moment the order arrived (step 0), in basis points:
     shortfall_bps = (avg_fill_price - arrival_mid) / arrival_mid * 10_000
 
 Lower is better. The agent is compared with a TWAP run on the same scenario
-and the same exogenous price path, so luck in the random walk cancels out.
+and the same exogenous price path, controlling for differences between paths.
+The selected scenarios and seeds still affect the comparison.
 
 Score in [0, 1]:
 
