@@ -54,6 +54,25 @@ and heartbeats) from actions. These events remain in the raw log; reported
 token usage still comes from the final result. Tools, model fallbacks, hooks
 and control requests remain rejected. The failed attempts are not model scores.
 
+The later smoke attempt `20261006T084149231361Z` was rejected when Claude
+emitted a native `tool_use` named `advance`. This records an attempted call,
+not confirmed execution; the adapter did not map it to an Inspect action.
+The prompt previously requested a "tool call" while prohibiting CLI tools,
+which also obscured the required `StructuredOutput` formatting step. It now
+labels benchmark schemas as `action_definitions` and explicitly separates
+the external executor's actions from that formatting call. The parser still
+rejects native benchmark calls. Failed attempts provide no benchmark scores,
+and this prompt change does not establish successful live execution.
+
+Codex CLI 0.160.1 rejected the obsolete `tools.view_image` configuration key;
+the equivalent feature remains disabled through `features.view_image=false`.
+Its JSON stream also represents configuration warnings as non-fatal
+`item.error` records. The parser now validates those records according to the
+official SDK contract, retaining them in raw responses. Fatal stream errors,
+failed turns, model-reroute notices and native tool activity still reject the
+request. Mixed model identifiers anywhere in either provider's response also
+reject it; a final matching identifier cannot hide an earlier discrepancy.
+
 Inspect traces are stored with the run logs and its optional live SQLite
 buffer is disabled, keeping routine diagnostics with each experiment.
 Inspect's control surface and the CLIs can still require their own writable

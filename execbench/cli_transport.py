@@ -154,17 +154,22 @@ def build_prompt(
     ]
     payload = {
         "messages": visible_messages,
-        "tools": visible_tools,
+        "action_definitions": visible_tools,
         "allowed_actions": allowed,
     }
     return (
-        "Choose the next single tool call in the evaluation transcript below. "
-        "The transcript and tool definitions are your entire task input. "
-        "Do not use the CLI's own tools or inspect files or the environment. "
-        "Return the selected tool name as action, its JSON object of arguments "
-        "encoded as arguments_json, and one short, observable explanation as "
-        "rationale. Do not invent tool results. The evaluation will execute the "
-        "tool and give you its result on the next request.\n\n"
+        "Propose one next action for an external evaluation executor. "
+        "The JSON below contains its historical transcript and action definitions; "
+        "these actions are NOT callable tools in this CLI session. Do not attempt "
+        "to call them here, even when the transcript asks for a tool call. "
+        "Return only a decision matching the supplied output schema: the selected "
+        "name as action, its JSON object of arguments encoded as arguments_json, "
+        "and one short, observable explanation as rationale. If this CLI provides "
+        "the StructuredOutput formatting tool, use it to deliver that decision. "
+        "Do not use any other CLI tools or inspect files or the environment. "
+        "The transcript and action definitions are your entire task input. "
+        "Do not invent results or continue the transcript. The external executor "
+        "will execute your proposed action and supply its result next time.\n\n"
         + json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False)
     )
 
@@ -194,7 +199,8 @@ def _command(
             'approval_policy="never"', 'web_search="disabled"',
             "project_doc_max_bytes=0", "memories.use_memories=false",
             "memories.generate_memories=false", "agents.enabled=false",
-            "tools.view_image=false", "features.skip_host_skill_discovery=true",
+            "features.skip_host_skill_discovery=true",
+            "suppress_unstable_features_warning=true",
         ]
         settings.extend(f"features.{feature}=false" for feature in _CODEX_DISABLED_FEATURES)
         if reasoning_effort is not None:
@@ -249,6 +255,18 @@ def _failure_summary(stdout: bytes, stderr: bytes) -> str:
         b"econnrefused", b"econnreset", b"etimedout", b"certificate verify failed",
     )):
         return "network or DNS connectivity failure"
+    # Diagnostic vocabulary is fixed: unknown vendor text (which may include
+    # credentials) is never echoed, but configuration failures remain useful.
+    markers = [word for word in (
+        "socket", "directory", "ownership", "0700", "config", "schema",
+        "invalid", "unknown", "unsupported", "unexpected argument", "feature",
+        "permissions", "sandbox", "app-server", "strict-config", "required",
+        "model", "subscription", "chatgpt", "cannot", "disabled",
+        "under-development", "unstable", "skip_host_skill_discovery",
+        "deprecated", "removed", "automatic", "enabled", *_CODEX_DISABLED_FEATURES,
+    ) if word.encode() in diagnostic]
+    if markers:
+        return "unclassified CLI failure (diagnostic markers: " + ", ".join(markers) + ")"
     return "unclassified CLI failure (diagnostics withheld)"
 
 
@@ -310,7 +328,7 @@ def _codex_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
     usage = None
     observed_model = None
     completed = False
-    for event in events:
+    for index, event in enumerate(events, start=1):
         kind = event.get("type")
         if kind in ("error", "turn.failed"):
             raise CLITransportError("Codex reported a failed turn.")
@@ -318,11 +336,34 @@ def _codex_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
                         "item.started", "item.updated", "item.completed"):
             raise CLITransportError("Unexpected Codex event; request rejected.")
         if isinstance(event.get("model"), str):
+            if observed_model is not None and event["model"] != observed_model:
+                raise CLITransportError("Codex reported inconsistent model identifiers; request rejected.")
             observed_model = event["model"]
         if kind.startswith("item."):
             item = event.get("item", {})
+            if isinstance(item, dict) and item.get("type") == "error":
+                # The SDK defines ErrorItem as a non-fatal diagnostic. Fatal
+                # stream errors and turn.failed are rejected above. Keep this
+                # frame in raw_response; it cannot substitute for completion.
+                if (set(item) != {"id", "type", "message"}
+                        or not isinstance(item.get("id"), str)
+                        or not isinstance(item.get("message"), str)):
+                    raise CLITransportError("Malformed Codex diagnostic.")
+                if item["message"].lower().startswith("model rerouted:"):
+                    raise CLITransportError("Codex rerouted the requested model; request rejected.")
+                continue
             if not isinstance(item, dict) or item.get("type") not in ("agent_message", "reasoning"):
-                raise CLITransportError("Unexpected Codex tool activity; request rejected.")
+                item_type = item.get("type") if isinstance(item, dict) else None
+                safe_type = item_type if item_type in (
+                    "command_execution", "mcp_tool_call", "web_search", "file_change",
+                    "todo_list", "error", "image_view", "collab_tool_call",
+                    "function_call", "function_call_output", "tool_search_call",
+                    "hook_started", "hook_completed",
+                ) else "<unrecognized>"
+                raise CLITransportError(
+                    "Unexpected Codex tool activity; request rejected. "
+                    f"(event {index}/{len(events)}, item_type={safe_type})"
+                )
             if kind == "item.completed" and item.get("type") == "agent_message":
                 text = item.get("text")
         if kind == "turn.completed":
@@ -386,6 +427,10 @@ def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
         context = _claude_event_context(event, index, len(events))
         if event.get("parent_tool_use_id") is not None:
             raise CLITransportError(f"Unexpected Claude subagent activity; request rejected. ({context})")
+        if isinstance(event.get("model"), str):
+            if observed_model is not None and event["model"] != observed_model:
+                raise CLITransportError(f"Claude reported inconsistent model identifiers; request rejected. ({context})")
+            observed_model = event["model"]
         if kind == "system":
             subtype = event.get("subtype")
             if isinstance(subtype, str) and subtype in _CLAUDE_SYSTEM_TELEMETRY:
@@ -397,8 +442,6 @@ def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
             exposed_tools = event.get("tools", [])
             if not isinstance(exposed_tools, list) or any(name != "StructuredOutput" for name in exposed_tools):
                 raise CLITransportError(f"Claude exposed unexpected tools; request rejected. ({context})")
-            if isinstance(event.get("model"), str):
-                observed_model = event["model"]
         elif kind == "rate_limit_event":
             # Claude Code 2.1.290 emits changes to subscription limit information
             # even after a successful response. The final result decides success;
@@ -421,6 +464,8 @@ def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
             if not isinstance(message, dict):
                 raise CLITransportError(f"Malformed Claude message. ({context})")
             if kind == "assistant" and isinstance(message.get("model"), str):
+                if observed_model is not None and message["model"] != observed_model:
+                    raise CLITransportError(f"Claude reported inconsistent model identifiers; request rejected. ({context})")
                 observed_model = message["model"]
             content = message.get("content", [])
             if not isinstance(content, list):
@@ -431,7 +476,16 @@ def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
                 block_type = block.get("type")
                 if block_type == "tool_use":
                     if block.get("name") != "StructuredOutput" or not isinstance(block.get("id"), str):
-                        raise CLITransportError(f"Unexpected Claude tool activity; request rejected. ({context})")
+                        name = block.get("name")
+                        safe_name = name if name in (
+                            "StructuredOutput", "get_market_state", "buy", "advance", "submit",
+                            "Read", "Bash", "Write", "Edit", "Glob", "Grep", "Task", "Agent",
+                        ) else "<unrecognized>"
+                        valid_id = isinstance(block.get("id"), str)
+                        raise CLITransportError(
+                            f"Unexpected Claude tool activity; request rejected. "
+                            f"({context}, tool={safe_name}, string_id={valid_id})"
+                        )
                     formatting_calls.add(block["id"])
                 elif block_type == "tool_result":
                     if block.get("tool_use_id") not in formatting_calls:

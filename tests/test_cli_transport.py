@@ -184,6 +184,53 @@ def test_claude_success_keeps_oauth_and_disables_tools(fake_cli):
     assert calls[0]["files"] == []
 
 
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+def test_repeated_consistent_model_identity_is_preserved(fake_cli, provider):
+    if provider == "codex":
+        events = codex_events()
+        for event in events:
+            event["model"] = "requested-model"
+    else:
+        events = claude_events()
+        events[0]["model"] = "requested-model"
+        events[1]["message"]["model"] = "requested-model"
+        events[-1]["model"] = "requested-model"
+    fake_cli(events)
+    result = asyncio.run(request(provider))
+    assert result["observed_model"] == "requested-model"
+    assert result["raw_response"] == events
+
+
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+@pytest.mark.parametrize("initial_model", ["requested-model", "private-other-model-id"])
+def test_mixed_model_response_cannot_hide_behind_final_requested_model(fake_cli, provider, initial_model):
+    if provider == "codex":
+        events = codex_events()
+        events[0]["model"] = initial_model
+        events.insert(2, {"type": "turn.started", "model": "private-other-model-id"})
+        events[-1]["model"] = "requested-model"
+    else:
+        events = claude_events()
+        events[0]["model"] = initial_model
+        events.insert(1, {"type": "assistant", "message": {
+            "model": "private-other-model-id", "content": [{"type": "text", "text": "Planning."}],
+        }})
+        events[2]["message"]["model"] = "requested-model"
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="inconsistent model identifiers") as caught:
+        asyncio.run(request(provider))
+    assert "private-other-model-id" not in str(caught.value)
+
+
+def test_claude_final_envelope_cannot_override_assistant_model(fake_cli):
+    events = claude_events()
+    events[1]["message"]["model"] = events[0]["model"]
+    events[-1]["model"] = "different-model"
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="inconsistent model identifiers"):
+        asyncio.run(request("claude"))
+
+
 @pytest.mark.parametrize("status", ["allowed", "allowed_warning", "rejected"])
 def test_claude_informational_events_preserve_success_and_raw_response(fake_cli, status):
     events = claude_events()
@@ -361,6 +408,93 @@ def test_codex_native_tool_activity_is_rejected(fake_cli, item_type):
     fake_cli(events)
     with pytest.raises(transport.CLITransportError, match="tool activity"):
         asyncio.run(request())
+
+
+@pytest.mark.parametrize("event_type", ["item.started", "item.updated", "item.completed"])
+def test_codex_nonfatal_diagnostic_preserves_completed_decision_and_raw_response(fake_cli, event_type):
+    events = codex_events()
+    events.insert(2, {
+        "type": event_type,
+        "item": {"id": "diagnostic-1", "type": "error", "message": "Recovered transient diagnostic."},
+    })
+    fake_cli(events)
+    result = asyncio.run(request())
+    assert result["action"] == "buy"
+    assert result["usage"] == events[-1]["usage"]
+    assert result["raw_response"] == events
+
+
+@pytest.mark.parametrize("field", ["id", "message"])
+@pytest.mark.parametrize("invalid_value", [None, 42, []])
+def test_codex_nonfatal_diagnostic_rejects_malformed_fields(fake_cli, field, invalid_value):
+    item = {"id": "diagnostic-1", "type": "error", "message": "private-diagnostic-message"}
+    item[field] = invalid_value
+    events = codex_events()
+    events.insert(2, {"type": "item.completed", "item": item})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="Malformed Codex diagnostic") as caught:
+        asyncio.run(request())
+    assert "private-diagnostic-message" not in str(caught.value)
+
+
+@pytest.mark.parametrize("field", ["id", "message"])
+def test_codex_nonfatal_diagnostic_requires_id_and_message(fake_cli, field):
+    item = {"id": "diagnostic-1", "type": "error", "message": "Diagnostic."}
+    del item[field]
+    events = codex_events()
+    events.insert(2, {"type": "item.completed", "item": item})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="Malformed Codex diagnostic"):
+        asyncio.run(request())
+
+
+def test_codex_nonfatal_diagnostic_does_not_authorize_native_tool_activity(fake_cli):
+    events = codex_events()
+    events[2:2] = [
+        {"type": "item.completed", "item": {
+            "id": "diagnostic-1", "type": "error", "message": "Diagnostic.",
+        }},
+        {"type": "item.started", "item": {"id": "command-1", "type": "command_execution"}},
+    ]
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="tool activity"):
+        asyncio.run(request())
+
+
+@pytest.mark.parametrize("fatal_type", ["error", "turn.failed"])
+def test_codex_nonfatal_diagnostic_cannot_mask_fatal_error(fake_cli, fatal_type):
+    events = codex_events()
+    events.insert(2, {"type": "item.completed", "item": {
+        "id": "diagnostic-1", "type": "error", "message": "Diagnostic.",
+    }})
+    events.append({"type": fatal_type, "message": "private-fatal-diagnostic"})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="failed turn") as caught:
+        asyncio.run(request())
+    assert "private-fatal-diagnostic" not in str(caught.value)
+
+
+def test_codex_nonfatal_diagnostic_cannot_replace_final_completion(fake_cli):
+    events = codex_events()[:-1]
+    events.append({"type": "item.completed", "item": {
+        "id": "diagnostic-1", "type": "error", "message": "Diagnostic.",
+    }})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="no completed"):
+        asyncio.run(request())
+
+
+def test_codex_model_rerouting_diagnostic_is_fatal_despite_final_requested_identity(fake_cli):
+    events = codex_events()
+    events[0]["model"] = "requested-model"
+    events.insert(2, {"type": "item.completed", "item": {
+        "id": "diagnostic-1", "type": "error", "message": "model rerouted: private-fallback-model",
+    }})
+    events[-1]["model"] = "requested-model"
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError) as caught:
+        asyncio.run(request())
+    assert "private-fallback-model" not in str(caught.value)
 
 
 @pytest.mark.parametrize("tool_name", ["Read", "Bash", "mcp__server__read"])

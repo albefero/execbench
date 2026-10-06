@@ -12,6 +12,11 @@ process. It requests one structured action and a brief explanation. Inspect
 then executes that action using the real benchmark tools. The simulator is
 still reconstructed from the per-sample action log, including during scoring.
 
+The prompt labels benchmark schemas as `action_definitions`: they describe
+actions for the external executor, not callable tools in the CLI session.
+Claude uses only its `StructuredOutput` formatting tool to return the decision;
+Inspect executes the selected benchmark action after the request completes.
+
 The adapter never receives scenario metadata, future prices or reference
 policy results. The supplied prompt contains the same task information as
 the API track, plus the transport instructions needed to return an action as
@@ -82,8 +87,14 @@ Each invocation starts in a fresh temporary directory, without resuming
 prior CLI sessions. Personalisation and native tools are restricted by the
 CLI-specific launch options. Codex additionally receives a filesystem rule
 denying the benchmark workspace. The transport rejects unexpected native
-tool execution, non-finite arguments and malformed responses. It never
+tool calls, non-finite arguments and malformed responses. It never
 executes a tool requested outside the provided benchmark schema.
+
+Codex distinguishes non-fatal `item.error` diagnostics from fatal top-level
+`error` and `turn.failed` events. The adapter validates and retains diagnostic
+items, while still requiring a completed turn and valid decision. Model-reroute
+diagnostics are rejected so that a fallback cannot be attributed to the requested
+model. This follows the [official CLI event mapping](https://github.com/openai/codex/blob/main/codex-rs/exec/src/event_processor_with_jsonl_output.rs).
 
 Claude's `rate_limit_event` and `keep_alive` records are protocol notifications,
 not tool calls. The adapter validates them and retains them in the raw response;
@@ -92,6 +103,13 @@ notification alone does not invalidate an already successful response.
 The same applies to documented `system` telemetry: `thinking_tokens`,
 `thinking`, `status`, `turn_duration` and `notification`. These records do not
 replace final usage counts or authorise tool activity or model changes.
+
+A Claude Code 2.1.290 smoke attempt emitted `advance` through the native
+`tool_use` channel. The adapter rejected the attempted call; it was not mapped
+to an Inspect action. This is evidence of a protocol mismatch, not evidence
+that the CLI executed `advance`. The clarified prompt explicitly separates
+external actions from the `StructuredOutput` formatting call. Failed smoke
+attempts produce no benchmark scores.
 
 These controls require an end-to-end smoke test with the installed CLI
 versions before publishing results. Unit tests of command construction do
