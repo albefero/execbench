@@ -31,6 +31,28 @@ class CLITransportError(RuntimeError):
 _PROCESS_LOCK = threading.Lock()
 _MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 _MESSAGE_FIELDS = ("role", "content", "tool_calls", "tool_call_id", "function", "error")
+# These names are for safe diagnostics, not permission to accept the events.
+_CLAUDE_EVENT_TYPES = frozenset({
+    "assistant", "user", "result", "system", "stream_event", "tool_progress",
+    "tool_use_summary", "rate_limit_event", "prompt_suggestion", "conversation_reset",
+    "command_lifecycle", "transcript_mirror", "auth_status", "active_goal",
+    "autocompact_state", "keep_alive", "control_request", "control_response",
+    "control_cancel_request",
+})
+_CLAUDE_EVENT_SUBTYPES = {
+    "system": frozenset({
+        "init", "status", "informational", "api_error", "api_retry", "compact_boundary",
+        "model_fallback", "model_consent_fallback", "model_refusal_fallback",
+        "model_refusal_no_fallback", "permission_denied", "permission_retry",
+        "hook_started", "hook_progress", "hook_response", "stop_hook_summary",
+        "task_started", "task_progress", "task_notification", "task_summary",
+        "task_updated", "turn_duration", "thinking", "thinking_tokens", "notification",
+    }),
+    "result": frozenset({
+        "success", "error_during_execution", "error_max_turns", "error_max_budget_usd",
+        "error_max_structured_output_retries",
+    }),
+}
 _CODEX_DISABLED_FEATURES = (
     "shell_tool", "unified_exec", "code_mode", "code_mode_host", "apps",
     "plugins", "remote_plugin", "browser_use", "browser_use_external",
@@ -286,50 +308,81 @@ def _codex_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
     return _json_loads(text), usage, observed_model
 
 
+def _claude_event_context(event: dict, index: int, total: int) -> str:
+    """Only vendor protocol names can appear in errors; never echo arbitrary data."""
+    kind = event.get("type")
+    safe_kind = kind if isinstance(kind, str) and kind in _CLAUDE_EVENT_TYPES else "<unrecognized>"
+    context = f"event {index}/{total}, type={safe_kind}"
+    if "subtype" in event:
+        subtype = event["subtype"]
+        known_subtypes = _CLAUDE_EVENT_SUBTYPES.get(safe_kind, ())
+        safe_subtype = subtype if isinstance(subtype, str) and subtype in known_subtypes else "<unrecognized>"
+        context += f", subtype={safe_subtype}"
+    return context
+
+
 def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
     result = None
     observed_model = None
     formatting_calls = set()
-    for event in events:
+    for index, event in enumerate(events, start=1):
         kind = event.get("type")
+        context = _claude_event_context(event, index, len(events))
         if event.get("parent_tool_use_id") is not None:
-            raise CLITransportError("Unexpected Claude subagent activity; request rejected.")
+            raise CLITransportError(f"Unexpected Claude subagent activity; request rejected. ({context})")
         if kind == "system":
             if event.get("subtype") != "init":
-                raise CLITransportError("Unexpected Claude system event; request rejected.")
+                raise CLITransportError(f"Unexpected Claude system event; request rejected. ({context})")
             exposed_tools = event.get("tools", [])
             if not isinstance(exposed_tools, list) or any(name != "StructuredOutput" for name in exposed_tools):
-                raise CLITransportError("Claude exposed unexpected tools; request rejected.")
+                raise CLITransportError(f"Claude exposed unexpected tools; request rejected. ({context})")
             if isinstance(event.get("model"), str):
                 observed_model = event["model"]
+        elif kind == "rate_limit_event":
+            # Claude Code 2.1.290 emits changes to subscription limit information
+            # even after a successful response. The final result decides success;
+            # preserve all these informational events in raw_response.
+            info = event.get("rate_limit_info")
+            if (
+                set(event) != {"type", "rate_limit_info", "uuid", "session_id"}
+                or not isinstance(info, dict)
+                or info.get("status") not in ("allowed", "allowed_warning", "rejected")
+                or not isinstance(event.get("uuid"), str)
+                or not isinstance(event.get("session_id"), str)
+            ):
+                raise CLITransportError(f"Malformed Claude rate limit event. ({context})")
+        elif kind == "keep_alive":
+            # The vendor schema defines this heartbeat with no payload.
+            if set(event) != {"type"}:
+                raise CLITransportError(f"Malformed Claude heartbeat event. ({context})")
         elif kind in ("assistant", "user"):
             message = event.get("message", {})
             if not isinstance(message, dict):
-                raise CLITransportError("Malformed Claude message.")
+                raise CLITransportError(f"Malformed Claude message. ({context})")
             if kind == "assistant" and isinstance(message.get("model"), str):
                 observed_model = message["model"]
             content = message.get("content", [])
             if not isinstance(content, list):
-                raise CLITransportError("Malformed Claude message content.")
+                raise CLITransportError(f"Malformed Claude message content. ({context})")
             for block in content:
                 if not isinstance(block, dict):
-                    raise CLITransportError("Malformed Claude content block.")
+                    raise CLITransportError(f"Malformed Claude content block. ({context})")
                 block_type = block.get("type")
                 if block_type == "tool_use":
                     if block.get("name") != "StructuredOutput" or not isinstance(block.get("id"), str):
-                        raise CLITransportError("Unexpected Claude tool activity; request rejected.")
+                        raise CLITransportError(f"Unexpected Claude tool activity; request rejected. ({context})")
                     formatting_calls.add(block["id"])
                 elif block_type == "tool_result":
                     if block.get("tool_use_id") not in formatting_calls:
-                        raise CLITransportError("Unexpected Claude tool result; request rejected.")
+                        raise CLITransportError(f"Unexpected Claude tool result; request rejected. ({context})")
                 elif block_type not in ("text", "thinking", "redacted_thinking"):
-                    raise CLITransportError("Unexpected Claude content; request rejected.")
+                    raise CLITransportError(f"Unexpected Claude content; request rejected. ({context})")
         elif kind == "result":
             if event.get("is_error") or event.get("subtype") != "success":
-                raise CLITransportError("Claude reported a failed request.")
+                raise CLITransportError(f"Claude reported a failed request. ({context})")
             result = event
         else:
-            raise CLITransportError("Unexpected Claude event; request rejected.")
+            raise CLITransportError(f"Unexpected Claude event; request rejected. ({context})")
     if result is None or not isinstance(result.get("structured_output"), dict):
         raise CLITransportError("Claude returned no completed structured decision.")
     return result["structured_output"], result.get("usage"), observed_model

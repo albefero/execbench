@@ -85,6 +85,11 @@ denying the benchmark workspace. The transport rejects unexpected native
 tool execution, non-finite arguments and malformed responses. It never
 executes a tool requested outside the provided benchmark schema.
 
+Claude's `rate_limit_event` and `keep_alive` records are protocol notifications,
+not tool calls. The adapter validates them and retains them in the raw response;
+the final `result` event determines whether the call succeeded. A quota-state
+notification alone does not invalidate an already successful response.
+
 These controls require an end-to-end smoke test with the installed CLI
 versions before publishing results. Unit tests of command construction do
 not establish that a particular CLI build enforces every option.

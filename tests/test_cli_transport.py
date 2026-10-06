@@ -43,6 +43,21 @@ def claude_events(decision=None):
     ]
 
 
+def claude_rate_limit_event(status="allowed_warning"):
+    """Fixture matching the schema embedded in Claude Code 2.1.290."""
+    return {
+        "type": "rate_limit_event",
+        "rate_limit_info": {
+            "status": status, "rateLimitType": "five_hour",
+            "utilization": 0.85, "resetsAt": 1791259200,
+            "unifiedWindows": {"five_hour": {"utilization": 0.85, "resetsAt": 1791259200}},
+            "isUsingOverage": False,
+        },
+        "uuid": "12345678-1234-4234-8234-123456789abc",
+        "session_id": "12345678-1234-4234-8234-123456789def",
+    }
+
+
 @pytest.fixture
 def fake_cli(monkeypatch):
     """A fake subprocess records argv/cwd/stdin; no executable is launched."""
@@ -158,6 +173,105 @@ def test_claude_success_keeps_oauth_and_disables_tools(fake_cli):
     assert "mcp__*" in argv
     assert "--no-session-persistence" in argv
     assert calls[0]["files"] == []
+
+
+@pytest.mark.parametrize("status", ["allowed", "allowed_warning", "rejected"])
+def test_claude_informational_events_preserve_success_and_raw_response(fake_cli, status):
+    events = claude_events()
+    events.insert(1, claude_rate_limit_event(status))
+    events.insert(0, {"type": "keep_alive"})
+    events.append({"type": "keep_alive"})
+    fake_cli(events)
+    result = asyncio.run(request("claude"))
+    assert result["action"] == "buy"
+    assert result["usage"] == events[-2]["usage"]
+    assert result["raw_response"] == events
+
+
+def test_claude_informational_events_do_not_override_final_error(fake_cli):
+    events = claude_events()
+    events.insert(1, claude_rate_limit_event("rejected"))
+    events[-1] = {
+        "type": "result", "subtype": "error_during_execution", "is_error": True,
+        "errors": ["secret-diagnostic"],
+    }
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="failed request") as caught:
+        asyncio.run(request("claude"))
+    assert "event 5/5, type=result, subtype=error_during_execution" in str(caught.value)
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize("info", [None, [], "secret-info", {}, {"status": "unknown"}, {"status": []}])
+def test_claude_malformed_rate_limit_info_is_rejected(fake_cli, info):
+    event = claude_rate_limit_event()
+    event["rate_limit_info"] = info
+    fake_cli([event, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed Claude rate limit event"):
+        asyncio.run(request("claude"))
+
+
+@pytest.mark.parametrize("mutation", [
+    {"uuid": None}, {"session_id": []}, {"message": {"content": "secret"}},
+])
+def test_claude_malformed_rate_limit_envelope_is_rejected(fake_cli, mutation):
+    event = {**claude_rate_limit_event(), **mutation}
+    fake_cli([event, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed Claude rate limit event"):
+        asyncio.run(request("claude"))
+
+
+def test_claude_rate_limit_envelope_requires_vendor_fields(fake_cli):
+    event = claude_rate_limit_event()
+    del event["uuid"]
+    fake_cli([event, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed Claude rate limit event"):
+        asyncio.run(request("claude"))
+
+
+def test_claude_heartbeat_with_payload_is_rejected(fake_cli):
+    fake_cli([{"type": "keep_alive", "content": "secret-payload"}, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Malformed Claude heartbeat event") as caught:
+        asyncio.run(request("claude"))
+    assert "secret" not in str(caught.value)
+
+
+def test_claude_informational_events_cannot_replace_completed_result(fake_cli):
+    fake_cli([claude_rate_limit_event(), {"type": "keep_alive"}])
+    with pytest.raises(transport.CLITransportError, match="no completed"):
+        asyncio.run(request("claude"))
+
+
+@pytest.mark.parametrize("kind", ["tool_progress", "tool_use_summary", "control_request"])
+def test_claude_other_protocol_events_remain_rejected_with_safe_context(fake_cli, kind):
+    events = claude_events()
+    events.insert(1, {"type": kind, "tool_name": "secret-tool", "uuid": "secret-id"})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError, match="Unexpected Claude event") as caught:
+        asyncio.run(request("claude"))
+    assert str(caught.value) == (
+        f"Unexpected Claude event; request rejected. (event 2/5, type={kind})"
+    )
+
+
+@pytest.mark.parametrize("event,context", [
+    ({"type": "secret-type", "subtype": "secret-subtype"},
+     "type=<unrecognized>, subtype=<unrecognized>"),
+    ({"type": ["secret-type"], "subtype": {"secret": "value"}},
+     "type=<unrecognized>, subtype=<unrecognized>"),
+    ({"type": "system", "subtype": "secret-subtype"},
+     "type=system, subtype=<unrecognized>"),
+    ({"type": "system", "subtype": "api_retry"},
+     "type=system, subtype=api_retry"),
+])
+def test_claude_error_context_redacts_arbitrary_names_and_payloads(fake_cli, event, context):
+    events = claude_events()
+    events.insert(1, {**event, "content": "secret-content", "uuid": "secret-id"})
+    fake_cli(events)
+    with pytest.raises(transport.CLITransportError) as caught:
+        asyncio.run(request("claude"))
+    assert f"(event 2/5, {context})" in str(caught.value)
+    assert "secret" not in str(caught.value)
 
 
 @pytest.mark.parametrize("item_type", ["command_execution", "file_change", "mcp_tool_call", "web_search", "collab_tool_call"])
