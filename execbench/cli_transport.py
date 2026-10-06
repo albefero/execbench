@@ -53,6 +53,31 @@ _CLAUDE_EVENT_SUBTYPES = {
         "error_max_structured_output_retries",
     }),
 }
+# Display-only system frames from the Claude Code 2.1.290 SDK schema. These
+# carry neither actions nor authoritative token usage. Required/optional field
+# types are checked without rejecting additional vendor envelope metadata.
+_CLAUDE_SYSTEM_TELEMETRY = {
+    "thinking_tokens": (
+        {"estimated_tokens": int, "estimated_tokens_delta": int},
+        {"user_message_uuid": str},
+    ),
+    "thinking": ({"content": str}, {}),
+    "turn_duration": (
+        {"duration_ms": int},
+        {name: int for name in (
+            "budget_tokens", "budget_limit", "budget_nudges", "message_count",
+            "pending_background_agent_count", "pending_workflow_count",
+        )},
+    ),
+    "status": (
+        {"status": (str, type(None))},
+        {"permissionMode": str, "compact_result": str, "compact_error": str},
+    ),
+    "notification": (
+        {"key": str, "text": str, "priority": str},
+        {"color": str, "timeout_ms": int},
+    ),
+}
 _CODEX_DISABLED_FEATURES = (
     "shell_tool", "unified_exec", "code_mode", "code_mode_host", "apps",
     "plugins", "remote_plugin", "browser_use", "browser_use_external",
@@ -321,6 +346,37 @@ def _claude_event_context(event: dict, index: int, total: int) -> str:
     return context
 
 
+def _valid_claude_telemetry(event: dict, subtype: str) -> bool:
+    required, optional = _CLAUDE_SYSTEM_TELEMETRY[subtype]
+    required = {"uuid": str, "session_id": str, **required}
+    for name, expected in {**required, **optional}.items():
+        if name not in event:
+            if name in required:
+                return False
+        elif type(event[name]) not in (expected if isinstance(expected, tuple) else (expected,)):
+            return False
+    if any(name in event for name in ("tool_use_id", "tool_name", "tool_calls", "message")):
+        return False
+    if subtype == "status":
+        if event["status"] not in (None, "requesting", "compacting"):
+            return False
+        if "compact_result" in event and event["compact_result"] not in ("success", "failed"):
+            return False
+        if "permissionMode" in event and event["permissionMode"] not in (
+            "default", "acceptEdits", "bypassPermissions", "plan", "dontAsk", "auto",
+        ):
+            return False
+    if subtype == "notification" and event["priority"] not in ("low", "medium", "high", "immediate"):
+        return False
+    # A duration banner can disclose background activity even without a separate
+    # tool event. It cannot make an otherwise forbidden agent/workflow acceptable.
+    if any(event.get(name, 0) != 0 for name in (
+        "pending_background_agent_count", "pending_workflow_count",
+    )):
+        return False
+    return True
+
+
 def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
     result = None
     observed_model = None
@@ -331,7 +387,12 @@ def _claude_result(events: list[dict]) -> tuple[dict, dict | None, str | None]:
         if event.get("parent_tool_use_id") is not None:
             raise CLITransportError(f"Unexpected Claude subagent activity; request rejected. ({context})")
         if kind == "system":
-            if event.get("subtype") != "init":
+            subtype = event.get("subtype")
+            if isinstance(subtype, str) and subtype in _CLAUDE_SYSTEM_TELEMETRY:
+                if not _valid_claude_telemetry(event, subtype):
+                    raise CLITransportError(f"Malformed or unsafe Claude telemetry event. ({context})")
+                continue
+            if subtype != "init":
                 raise CLITransportError(f"Unexpected Claude system event; request rejected. ({context})")
             exposed_tools = event.get("tools", [])
             if not isinstance(exposed_tools, list) or any(name != "StructuredOutput" for name in exposed_tools):

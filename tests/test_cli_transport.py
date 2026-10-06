@@ -58,6 +58,15 @@ def claude_rate_limit_event(status="allowed_warning"):
     }
 
 
+def claude_telemetry(subtype, **fields):
+    return {
+        "type": "system", "subtype": subtype,
+        "uuid": "12345678-1234-4234-8234-123456789abc",
+        "session_id": "12345678-1234-4234-8234-123456789def",
+        **fields,
+    }
+
+
 @pytest.fixture
 def fake_cli(monkeypatch):
     """A fake subprocess records argv/cwd/stdin; no executable is launched."""
@@ -199,6 +208,77 @@ def test_claude_informational_events_do_not_override_final_error(fake_cli):
     with pytest.raises(transport.CLITransportError, match="failed request") as caught:
         asyncio.run(request("claude"))
     assert "event 5/5, type=result, subtype=error_during_execution" in str(caught.value)
+    assert "secret" not in str(caught.value)
+
+
+def test_claude_headless_telemetry_sequence_keeps_decision_and_billed_usage(fake_cli):
+    base = claude_events()
+    events = [
+        base[0],
+        claude_telemetry("thinking_tokens", estimated_tokens=2400, estimated_tokens_delta=2400),
+        claude_telemetry("status", status="requesting"),
+        claude_telemetry("thinking", content="Fixture display text."),
+        claude_telemetry("notification", key="fixture", text="Fixture notice.", priority="low"),
+        claude_rate_limit_event(),
+        *base[1:3],
+        claude_telemetry("status", status=None),
+        base[-1],
+        claude_telemetry(
+            "turn_duration", duration_ms=1250, budget_tokens=15, budget_limit=1000,
+            budget_nudges=0, message_count=4, pending_background_agent_count=0,
+            pending_workflow_count=0,
+        ),
+        {"type": "keep_alive"},
+    ]
+    fake_cli(events)
+    result = asyncio.run(request("claude"))
+    assert result["action"] == "buy"
+    assert result["usage"] == base[-1]["usage"]
+    assert result["usage"]["output_tokens"] == 15
+    assert result["raw_response"] == events
+
+
+@pytest.mark.parametrize("event", [
+    claude_telemetry("status", status="compacting", compact_result="success", permissionMode="default"),
+    claude_telemetry("thinking_tokens", estimated_tokens=3, estimated_tokens_delta=1, user_message_uuid="fixture"),
+    claude_telemetry("notification", key="fixture", text="Fixture notice.", priority="immediate", timeout_ms=100, color="gray"),
+])
+def test_claude_telemetry_optional_vendor_fields_are_accepted(fake_cli, event):
+    fake_cli([event, *claude_events()])
+    assert asyncio.run(request("claude"))["action"] == "buy"
+
+
+@pytest.mark.parametrize("event", [
+    claude_telemetry("thinking_tokens", estimated_tokens=3),
+    claude_telemetry("thinking_tokens", estimated_tokens=True, estimated_tokens_delta=1),
+    claude_telemetry("thinking_tokens", estimated_tokens="secret", estimated_tokens_delta=1),
+    claude_telemetry("thinking", content={"secret": "value"}),
+    claude_telemetry("turn_duration", duration_ms="secret"),
+    claude_telemetry("turn_duration", duration_ms=1, pending_background_agent_count=1),
+    claude_telemetry("turn_duration", duration_ms=1, pending_workflow_count=1),
+    claude_telemetry("status", status="secret"),
+    claude_telemetry("status", status=None, compact_result="secret"),
+    claude_telemetry("status", status=None, permissionMode="secret"),
+    claude_telemetry("notification", key="fixture", text="secret", priority="unknown"),
+    claude_telemetry("thinking", content="secret", uuid=None),
+    claude_telemetry("thinking", content="secret", tool_name="Bash"),
+])
+def test_claude_malformed_or_unsafe_telemetry_is_rejected(fake_cli, event):
+    fake_cli([event, *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="telemetry event") as caught:
+        asyncio.run(request("claude"))
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize("subtype", [
+    "model_fallback", "model_refusal_fallback", "hook_started", "hook_response",
+    "stop_hook_summary", "task_started", "permission_retry", "informational",
+    "api_retry", "api_error", "compact_boundary",
+])
+def test_claude_telemetry_does_not_allow_side_effects_or_recovery_events(fake_cli, subtype):
+    fake_cli([claude_telemetry(subtype, content="secret"), *claude_events()])
+    with pytest.raises(transport.CLITransportError, match="Unexpected Claude system event") as caught:
+        asyncio.run(request("claude"))
     assert "secret" not in str(caught.value)
 
 

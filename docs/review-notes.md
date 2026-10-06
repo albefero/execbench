@@ -46,13 +46,13 @@ that model-call details survive beyond Inspect's default five-call cutoff.
 An end-to-end CLI smoke run with a real model has not yet completed; scripted
 integration tests do not establish that live execution works.
 
-A live smoke attempt with Claude Code 2.1.290 reached the response parser,
-which rejected an unrecognised event. The original error did not identify its
-type, so that attempt cannot establish exactly which event caused the failure.
-Reviewing the installed protocol revealed two missing informational events:
-`rate_limit_event` and `keep_alive`. These now have explicit validation, and
-future rejection diagnostics identify known protocol labels without copying
-response contents or session identifiers. The failed run is not a model score.
+A live smoke attempt with Claude Code 2.1.290 identified an unsupported
+`system/thinking_tokens` event. The parser had treated routine CLI telemetry
+as unexpected execution activity. It now distinguishes documented telemetry
+(including progress, thinking counters, timing, notifications, quota updates
+and heartbeats) from actions. These events remain in the raw log; reported
+token usage still comes from the final result. Tools, model fallbacks, hooks
+and control requests remain rejected. The failed attempts are not model scores.
 
 Inspect traces are stored with the run logs and its optional live SQLite
 buffer is disabled, keeping routine diagnostics with each experiment.

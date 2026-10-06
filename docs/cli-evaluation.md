@@ -89,6 +89,9 @@ Claude's `rate_limit_event` and `keep_alive` records are protocol notifications,
 not tool calls. The adapter validates them and retains them in the raw response;
 the final `result` event determines whether the call succeeded. A quota-state
 notification alone does not invalidate an already successful response.
+The same applies to documented `system` telemetry: `thinking_tokens`,
+`thinking`, `status`, `turn_duration` and `notification`. These records do not
+replace final usage counts or authorise tool activity or model changes.
 
 These controls require an end-to-end smoke test with the installed CLI
 versions before publishing results. Unit tests of command construction do
