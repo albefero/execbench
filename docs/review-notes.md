@@ -43,8 +43,11 @@ an integration test that runs scripted decisions through the real Inspect
 loop, market tools and scorer, comparing the complete action log with TWAP.
 The test checks that private sample metadata never reaches the transport and
 that model-call details survive beyond Inspect's default five-call cutoff.
-An end-to-end CLI smoke run with a real model has not yet completed; scripted
-integration tests do not establish that live execution works.
+The smoke run `20261006T085315879123Z` completed successfully for all four
+requested models on 6 October 2026, using Inspect 0.3.276, Claude Code 2.1.290
+and Codex CLI 0.160.1. Each evaluated `deep_calm` once without hitting the
+message limit. These four smoke samples validate live integration; they are
+excluded from the full core experiment and its aggregate results.
 
 A live smoke attempt with Claude Code 2.1.290 identified an unsupported
 `system/thinking_tokens` event. The parser had treated routine CLI telemetry
@@ -61,8 +64,8 @@ The prompt previously requested a "tool call" while prohibiting CLI tools,
 which also obscured the required `StructuredOutput` formatting step. It now
 labels benchmark schemas as `action_definitions` and explicitly separates
 the external executor's actions from that formatting call. The parser still
-rejects native benchmark calls. Failed attempts provide no benchmark scores,
-and this prompt change does not establish successful live execution.
+rejects native benchmark calls. Failed attempts provide no benchmark scores;
+the successful smoke run above followed this correction.
 
 Codex CLI 0.160.1 rejected the obsolete `tools.view_image` configuration key;
 the equivalent feature remains disabled through `features.view_image=false`.

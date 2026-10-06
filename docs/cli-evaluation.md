@@ -75,6 +75,12 @@ timeout; each sample has a 1,200-second time limit. These limits are recorded
 in the manifest and can be selected explicitly with `--call-timeout` and
 `--sample-time-limit`. The benchmark's 160-message limit is unchanged.
 
+Independent runner processes may evaluate different CLI providers concurrently.
+The core experiment uses one process for the three Claude models in sequence
+and another for Codex, each with one active sample and one model call. Their
+manifests must identify the same source commit, source hash and Inspect version
+before their results can be combined.
+
 Three epochs repeat the same six seeded markets. They measure variation
 between model executions on those markets, not generalisation to 18
 independent markets. A CLI can make multiple internal turns to format one
