@@ -1,0 +1,10 @@
+logs/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
+.env
+.env.*
+!.env.example
+# Local handoff, including application context and a duplicate source appendix.
+BRIEFING.md
