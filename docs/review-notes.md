@@ -45,7 +45,8 @@ an integration test that runs scripted decisions through the real Inspect
 loop, market tools and scorer, comparing the complete action log with TWAP.
 The test checks that private sample metadata never reaches the transport and
 that model-call details survive beyond Inspect's default five-call cutoff.
-The smoke run `20261006T085315879123Z` completed successfully for all four
+The earlier development smoke run `20261006T085315879123Z` completed successfully
+for all four
 requested models on 6 October 2026, using Inspect 0.3.276, Claude Code 2.1.290
 and Codex CLI 0.160.1. Each evaluated `deep_calm` once without hitting the
 message limit. These four smoke samples validate live integration; they are
@@ -98,10 +99,10 @@ data and private source from other projects are not included in this repository.
 
 ## Generated-scenario extension
 
-`_affordable_qty` applies its 0.1% budget margin whenever available quantity
-is below the requested quantity, including some cases where liquidity or a
-price cap is the binding constraint. The six core reference results are not
-affected. The extension corrects this behaviour and adds focused regression
+`_affordable_qty` previously applied its 0.1% budget margin whenever available
+quantity was below the requested quantity, including some cases where liquidity
+or a price cap was the binding constraint. The six core reference results were
+not affected. The extension corrects this behaviour and adds focused regression
 tests for budget, depth and cap boundaries. Full action lists and all metrics
 for the 12 core/policy combinations were compared before and after the change
 and remain exactly equal.
@@ -130,13 +131,99 @@ unknown system event. The fix validates its documented fields and retains the
 notification while still requiring a successful final decision, consistent
 model identity and no unexpected native actions.
 
-Because this correction changes the evaluated source, the full comparison is
-restarted for all four models from the same new commit, including the v0.2
-extension. The earlier successful Sonnet and Codex runs are retained locally
+Because this correction changed the evaluated source, the comparison was
+restarted for all four models from commit
+`68eec1732db240562f0f300bd6d63cbed90f44d8`, including the v0.2 extension. The
+earlier successful Sonnet and Codex runs are retained locally
 for audit but are excluded from the final comparison. No partial Opus scores
 are combined with a later run. Each new model run gets its own manifest.
 
-Inspect's `max_retries=0` prevents framework-level decision retries. It does
-not control HTTP retries inside a CLI executable. The documented CLI track
-includes that internal transport behaviour within the fixed process timeout;
-it must not be described as a protocol with no retries at any layer.
+Inspect's `max_retries=0` prevents automatic retries of failed CLI invocations;
+the runner stops on sample errors. It does not control HTTP retries inside a
+CLI executable. A successfully returned decision can still contain invalid
+tool arguments: after Inspect rejects them without executing the action, the
+agent may make a new decision within the original limits. These are distinct
+from both transport retries and sample restarts. The CLI track includes
+internal HTTP retries within the fixed process timeout; only `advance()` moves
+the simulated market.
+
+After the `api_retry` correction, smoke run `20261006T160748198248Z` completed
+one `deep_calm` sample for each of the three Claude models at the frozen commit,
+using Inspect 0.3.276 and Claude Code 2.1.291. The installed 2.1.291 `api_retry`
+schema was checked against 2.1.290 and is unchanged. Smoke samples and all
+earlier-commit runs are excluded from the final core comparison.
+
+## Final comparison validation
+
+All four final manifests completed successfully with 18 unique scenario/epoch
+pairs each, for 72 scored executions. The selected run directories are:
+
+| Requested CLI model | Directory under `logs/cli-core/` |
+|---|---|
+| `claude_cli/claude-haiku-4-5-20251001` | `20261006T161229045330Z` |
+| `claude_cli/claude-opus-5-5` | `20261006T165621683068Z` |
+| `claude_cli/claude-sonnet-5` | `20261006T172354900066Z` |
+| `codex_cli/gpt-6-astra` | `20261006T160748286264Z` |
+
+Each directory contains `run-manifest.json` and its native Inspect JSON log.
+The log basenames and SHA-256 hashes are recorded in
+[`results/summary.json`](../results/summary.json). These local logs remain
+excluded from Git and the review archive.
+
+A separate replay audit matched every sample's recorded actions, tool
+results, fills, scorer explanation and metrics. All 1,189 model calls retained
+their native responses. The 72 sets of public sample metrics, five aggregate
+means per model and both standard-error definitions matched the audited data.
+There were no sample errors, market-rule violations, no-fill samples or limit
+terminations. Haiku had one recovered tool-argument parsing error. Opus and
+Sonnet each left two orders incomplete; a successful evaluation does not imply
+a fully completed purchase. See [the findings](findings.md) for exact cases.
+
+Two generations of the report, with the manifest order reversed in the second,
+produced byte-identical JSON, Markdown and PNG files using Matplotlib 3.11.2.
+The final figure and the agreement between README, tables and JSON were also
+reviewed. The final delivery adds documentation and results to the experimental
+commit; the evaluated Python sources and dependency declaration are unchanged.
+The 30 generated and 10 held-out scenarios have not been evaluated with these
+real-model runs.
+
+## Delivery map
+
+| Brief task | Main files | Change and rationale |
+|---|---|---|
+| Real-model evaluation | `execbench/cli_transport.py`, `execbench/cli_provider.py`, `scripts/run_cli_evals.py`, `docs/cli-evaluation.md` | Use the owner-requested logged-in CLIs while retaining the Inspect agent and deterministic executor. Reject unexpected native actions and model fallbacks; retain raw responses and explicit provenance. |
+| Tables and chart | `scripts/results_table.py`, `results/`, `README.md` | Read native Inspect logs, validate complete compatible runs, and publish deterministic aggregates with both reference policies. Cost means exclude no-fill placeholders; score variability uses three complete-suite repetitions. |
+| Failure analysis | `docs/findings.md` | Count behaviours observed in the final transcripts and identify concrete samples, epochs and short visible quotations. Separate costly choices, tool-argument errors and market-rule violations. |
+| Generated scenarios | `execbench/generated.py`, `execbench/task.py`, `execbench/baselines.py`, `docs/scenario-generation.md` | Add fixed generated and held-out splits with selectable task sets. Narrow the budget margin to its intended case while preserving all core reference actions and metrics. |
+| Repository hygiene | `pyproject.toml`, `.github/workflows/tests.yml`, `CITATION.cff`, `.gitignore` | Pin the evaluated Inspect version, add credential-free CI, identify the author, and exclude raw logs, credentials and the private briefing. |
+
+Tests are in `tests/test_sim.py`, `test_agent_wiring.py`, `test_baselines.py`,
+`test_generated.py`, `test_cli_transport.py`, `test_cli_provider.py`,
+`test_cli_wiring.py`, `test_run_cli_evals.py` and `test_results_table.py`.
+The complete local suite at the experimental commit finished with:
+
+```text
+315 passed in 8.21s
+```
+
+The core reference table is unchanged. Dependency validation passed. GitHub
+Actions is configured but has not run remotely; repository publication remains
+an owner action after review.
+
+## Explaining the design in an interview
+
+- **Why separate proposal and execution?** The model chooses an action; the
+  executor checks it, applies it and records what actually happened. A fluent
+  final answer cannot replace evidence of trades or constraint compliance.
+- **Why replay the market for each tool call?** A scenario and its ordered
+  action list are enough to reconstruct the state and score. This avoids
+  hidden mutable state between calls and makes discrepancies inspectable.
+- **Why repeat fixed markets?** Repetitions expose variation in model
+  decisions under the same conditions. They do not add independent market
+  paths or establish performance in unfamiliar regimes.
+- **Why keep a separate held-out split?** Choosing distributions from their
+  scores would bias the evaluation. The split has distinct seeds and is not
+  used for tuning; its public seeds do not make it contamination-proof.
+- **Why document the CLI track separately?** The measured system includes the
+  model, vendor CLI and adapter. Its prompts, defaults and formatting can
+  influence decisions, so this experiment does not isolate a direct API model.

@@ -1,0 +1,830 @@
+{
+  "aggregation": {
+    "cost_means": "Only samples with fills; no-fill zero placeholders are excluded.",
+    "interpretation": "Six fixed scenarios repeated three times; across-suite dispersion, not a confidence interval for unseen markets.",
+    "repeat_score_sem": "SEM of three whole-suite epoch means: sample standard deviation / sqrt(3); only three repeats.",
+    "score_sem": "Descriptive SEM across six fixed-scenario means: sample standard deviation / sqrt(6)."
+  },
+  "models": [
+    {
+      "created_at": "2026-10-06T16:12:29+00:00",
+      "epoch_mean_scores": {
+        "1": 0.8792666666666666,
+        "2": 0.8432166666666667,
+        "3": 0.8403666666666667
+      },
+      "limited_samples": [],
+      "log_file": "2026-10-06T16-12-29-00-00_execbench_JKpe6Yvoafg2KyDbaV9B9n.json",
+      "log_sha256": "6aaf9208c1750424d9ecdeae61b66f3c7a0713da22f73b5a47209720ccee6f66",
+      "mean_completion": 1.0,
+      "mean_score": 0.8542833333333333,
+      "mean_shortfall_bps": 20.433333333333334,
+      "mean_violations": 0.0,
+      "mean_vs_twap_bps": -0.92,
+      "model": "claude_cli/claude-haiku-4-5-20251001",
+      "n_message_limited": 0,
+      "n_no_fills": 0,
+      "n_samples": 18,
+      "repeat_score_sem": 0.012518730411312105,
+      "samples": [
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "deep_calm",
+          "score": 0.7143,
+          "shortfall_bps": 3.0,
+          "violations": 0.0,
+          "vs_twap_bps": -4.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "blackout",
+          "score": 0.8663,
+          "shortfall_bps": 19.5,
+          "violations": 0.0,
+          "vs_twap_bps": -1.54
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "blackout",
+          "score": 1.0,
+          "shortfall_bps": 11.99,
+          "violations": 0.0,
+          "vs_twap_bps": 5.97
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "blackout",
+          "score": 0.944,
+          "shortfall_bps": 18.55,
+          "violations": 0.0,
+          "vs_twap_bps": -0.59
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "price_cap",
+          "score": 0.8147,
+          "shortfall_bps": 5.4,
+          "violations": 0.0,
+          "vs_twap_bps": -2.28
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "price_cap",
+          "score": 0.6568,
+          "shortfall_bps": 8.35,
+          "violations": 0.0,
+          "vs_twap_bps": -5.23
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "price_cap",
+          "score": 0.6568,
+          "shortfall_bps": 8.35,
+          "violations": 0.0,
+          "vs_twap_bps": -5.23
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "tight_budget",
+          "score": 0.8803,
+          "shortfall_bps": 15.36,
+          "violations": 0.0,
+          "vs_twap_bps": -1.36
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "tight_budget",
+          "score": 0.8143,
+          "shortfall_bps": 16.28,
+          "violations": 0.0,
+          "vs_twap_bps": -2.28
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "tight_budget",
+          "score": 0.8532,
+          "shortfall_bps": 15.72,
+          "violations": 0.0,
+          "vs_twap_bps": -1.72
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 62.3,
+          "violations": 0.0,
+          "vs_twap_bps": 15.7
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        }
+      ],
+      "scenario_mean_scores": {
+        "blackout": 0.9367666666666666,
+        "deep_calm": 0.6302333333333333,
+        "price_cap": 0.7094333333333334,
+        "thin_book": 1.0,
+        "tight_budget": 0.8492666666666666,
+        "trending_up": 1.0
+      },
+      "score_sem": 0.06337067831710791
+    },
+    {
+      "created_at": "2026-10-06T16:56:22+00:00",
+      "epoch_mean_scores": {
+        "1": 1.0,
+        "2": 0.9833333333333334,
+        "3": 0.96645
+      },
+      "limited_samples": [],
+      "log_file": "2026-10-06T16-56-22-00-00_execbench_VRdUtLJ3DRxEnKza2ViErr.json",
+      "log_sha256": "3d839b9708eb178bdfc72648f9e3e75346a27d9bd0cb93084fe8a6b302f5105c",
+      "mean_completion": 0.9833333333333334,
+      "mean_score": 0.9832611111111111,
+      "mean_shortfall_bps": 19.051111111111112,
+      "mean_violations": 0.0,
+      "mean_vs_twap_bps": 0.4627777777777778,
+      "model": "claude_cli/claude-opus-5-5",
+      "n_message_limited": 0,
+      "n_no_fills": 0,
+      "n_samples": 18,
+      "repeat_score_sem": 0.009685118086305343,
+      "samples": [
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "deep_calm",
+          "score": 1.0,
+          "shortfall_bps": -1.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "deep_calm",
+          "score": 1.0,
+          "shortfall_bps": -1.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "deep_calm",
+          "score": 1.0,
+          "shortfall_bps": -1.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "blackout",
+          "score": 1.0,
+          "shortfall_bps": 17.93,
+          "violations": 0.0,
+          "vs_twap_bps": 0.03
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "blackout",
+          "score": 1.0,
+          "shortfall_bps": 17.94,
+          "violations": 0.0,
+          "vs_twap_bps": 0.02
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "blackout",
+          "score": 0.9987,
+          "shortfall_bps": 17.97,
+          "violations": 0.0,
+          "vs_twap_bps": -0.01
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "price_cap",
+          "score": 1.0,
+          "shortfall_bps": 0.52,
+          "violations": 0.0,
+          "vs_twap_bps": 2.6
+        },
+        {
+          "completion": 0.9,
+          "epoch": 2,
+          "sample_id": "price_cap",
+          "score": 0.9,
+          "shortfall_bps": 2.0,
+          "violations": 0.0,
+          "vs_twap_bps": 1.13
+        },
+        {
+          "completion": 0.8,
+          "epoch": 3,
+          "sample_id": "price_cap",
+          "score": 0.8,
+          "shortfall_bps": 3.12,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 11.78,
+          "violations": 0.0,
+          "vs_twap_bps": 2.22
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 11.66,
+          "violations": 0.0,
+          "vs_twap_bps": 2.34
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 14.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        }
+      ],
+      "scenario_mean_scores": {
+        "blackout": 0.9995666666666667,
+        "deep_calm": 1.0,
+        "price_cap": 0.9,
+        "thin_book": 1.0,
+        "tight_budget": 1.0,
+        "trending_up": 1.0
+      },
+      "score_sem": 0.01665237257407121
+    },
+    {
+      "created_at": "2026-10-06T17:23:55+00:00",
+      "epoch_mean_scores": {
+        "1": 0.975,
+        "2": 0.8773166666666666,
+        "3": 0.9426833333333333
+      },
+      "limited_samples": [],
+      "log_file": "2026-10-06T17-23-55-00-00_execbench_DNvbXfeWVsRdeaxvX6HKkU.json",
+      "log_sha256": "b4a419f04ef0cad95732830a59c9e067cea4d17300526effe7867a4603093faf",
+      "mean_completion": 0.9827777777777778,
+      "mean_score": 0.9316666666666666,
+      "mean_shortfall_bps": 19.953333333333333,
+      "mean_violations": 0.0,
+      "mean_vs_twap_bps": -0.44,
+      "model": "claude_cli/claude-sonnet-5",
+      "n_message_limited": 0,
+      "n_no_fills": 0,
+      "n_samples": 18,
+      "repeat_score_sem": 0.02873171076883004,
+      "samples": [
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "deep_calm",
+          "score": 1.0,
+          "shortfall_bps": -1.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "deep_calm",
+          "score": 1.0,
+          "shortfall_bps": -1.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "thin_book",
+          "score": 0.9091,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -1.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "blackout",
+          "score": 1.0,
+          "shortfall_bps": 17.93,
+          "violations": 0.0,
+          "vs_twap_bps": 0.03
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "blackout",
+          "score": 0.9987,
+          "shortfall_bps": 17.97,
+          "violations": 0.0,
+          "vs_twap_bps": -0.01
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "blackout",
+          "score": 0.8161,
+          "shortfall_bps": 20.21,
+          "violations": 0.0,
+          "vs_twap_bps": -2.25
+        },
+        {
+          "completion": 0.85,
+          "epoch": 1,
+          "sample_id": "price_cap",
+          "score": 0.85,
+          "shortfall_bps": 1.82,
+          "violations": 0.0,
+          "vs_twap_bps": 1.3
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "price_cap",
+          "score": 0.9394,
+          "shortfall_bps": 3.77,
+          "violations": 0.0,
+          "vs_twap_bps": -0.65
+        },
+        {
+          "completion": 0.84,
+          "epoch": 3,
+          "sample_id": "price_cap",
+          "score": 0.84,
+          "shortfall_bps": 2.02,
+          "violations": 0.0,
+          "vs_twap_bps": 1.1
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 13.76,
+          "violations": 0.0,
+          "vs_twap_bps": 0.24
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "tight_budget",
+          "score": 0.8285,
+          "shortfall_bps": 16.07,
+          "violations": 0.0,
+          "vs_twap_bps": -2.07
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 13.81,
+          "violations": 0.0,
+          "vs_twap_bps": 0.19
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 75.8,
+          "violations": 0.0,
+          "vs_twap_bps": 2.2
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 78.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        }
+      ],
+      "scenario_mean_scores": {
+        "blackout": 0.9382666666666667,
+        "deep_calm": 0.8627333333333334,
+        "price_cap": 0.8764666666666666,
+        "thin_book": 0.9697,
+        "tight_budget": 0.9428333333333333,
+        "trending_up": 1.0
+      },
+      "score_sem": 0.021666470084578292
+    },
+    {
+      "created_at": "2026-10-06T16:07:48+00:00",
+      "epoch_mean_scores": {
+        "1": 0.7682,
+        "2": 0.9105166666666666,
+        "3": 0.7937333333333333
+      },
+      "limited_samples": [],
+      "log_file": "2026-10-06T16-07-48-00-00_execbench_Qkvk2xU6Kn37Gc4YbNXLYX.json",
+      "log_sha256": "cba1591abc0dd14c92c93dfaa15c4380d18758807cf1b0bee1c97694ae3c6b8e",
+      "mean_completion": 1.0,
+      "mean_score": 0.8241499999999999,
+      "mean_shortfall_bps": 22.688333333333333,
+      "mean_violations": 0.0,
+      "mean_vs_twap_bps": -3.175,
+      "model": "codex_cli/gpt-6-astra",
+      "n_message_limited": 0,
+      "n_no_fills": 0,
+      "n_samples": 18,
+      "repeat_score_sem": 0.04380787072019179,
+      "samples": [
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "deep_calm",
+          "score": 0.5882,
+          "shortfall_bps": 6.0,
+          "violations": 0.0,
+          "vs_twap_bps": -7.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "thin_book",
+          "score": 0.3546,
+          "shortfall_bps": 23.2,
+          "violations": 0.0,
+          "vs_twap_bps": -18.2
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "thin_book",
+          "score": 1.0,
+          "shortfall_bps": 5.0,
+          "violations": 0.0,
+          "vs_twap_bps": 0.0
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "thin_book",
+          "score": 0.3546,
+          "shortfall_bps": 23.2,
+          "violations": 0.0,
+          "vs_twap_bps": -18.2
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "blackout",
+          "score": 0.9859,
+          "shortfall_bps": 18.1,
+          "violations": 0.0,
+          "vs_twap_bps": -0.14
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "blackout",
+          "score": 0.9138,
+          "shortfall_bps": 18.9,
+          "violations": 0.0,
+          "vs_twap_bps": -0.94
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "blackout",
+          "score": 0.9859,
+          "shortfall_bps": 18.1,
+          "violations": 0.0,
+          "vs_twap_bps": -0.14
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "price_cap",
+          "score": 0.9611,
+          "shortfall_bps": 3.53,
+          "violations": 0.0,
+          "vs_twap_bps": -0.41
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "price_cap",
+          "score": 0.9611,
+          "shortfall_bps": 3.53,
+          "violations": 0.0,
+          "vs_twap_bps": -0.41
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "price_cap",
+          "score": 0.9611,
+          "shortfall_bps": 3.53,
+          "violations": 0.0,
+          "vs_twap_bps": -0.41
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "tight_budget",
+          "score": 0.7194,
+          "shortfall_bps": 17.9,
+          "violations": 0.0,
+          "vs_twap_bps": -3.9
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "tight_budget",
+          "score": 1.0,
+          "shortfall_bps": 12.54,
+          "violations": 0.0,
+          "vs_twap_bps": 1.46
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "tight_budget",
+          "score": 0.8726,
+          "shortfall_bps": 15.46,
+          "violations": 0.0,
+          "vs_twap_bps": -1.46
+        },
+        {
+          "completion": 1.0,
+          "epoch": 1,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 75.8,
+          "violations": 0.0,
+          "vs_twap_bps": 2.2
+        },
+        {
+          "completion": 1.0,
+          "epoch": 2,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 75.8,
+          "violations": 0.0,
+          "vs_twap_bps": 2.2
+        },
+        {
+          "completion": 1.0,
+          "epoch": 3,
+          "sample_id": "trending_up",
+          "score": 1.0,
+          "shortfall_bps": 75.8,
+          "violations": 0.0,
+          "vs_twap_bps": 2.2
+        }
+      ],
+      "scenario_mean_scores": {
+        "blackout": 0.9618666666666666,
+        "deep_calm": 0.5882,
+        "price_cap": 0.9611,
+        "thin_book": 0.5697333333333333,
+        "tight_budget": 0.864,
+        "trending_up": 1.0
+      },
+      "score_sem": 0.07971463072643474
+    }
+  ],
+  "provenance": {
+    "call_timeout_seconds": 180,
+    "cli_versions": {
+      "claude_cli": "2.1.291 (Claude Code)",
+      "codex_cli": "codex-cli 0.160.1"
+    },
+    "epochs": 3,
+    "git_commit": "68eec1732db240562f0f300bd6d63cbed90f44d8",
+    "inspect_version": "0.3.276",
+    "message_limit": 160,
+    "parallel_tool_calls": false,
+    "python_version": "3.11.15",
+    "reasoning_effort": "CLI default (not overridden)",
+    "sample_time_limit_seconds": 1200,
+    "source_sha256": "c2d0273bfe5edab04b41fc65cdc74531cd4584792e06a3554d393ac328229f27"
+  },
+  "reference_scores": {
+    "dump": {
+      "blackout": 0.9859,
+      "deep_calm": 0.5882,
+      "price_cap": 0.6568,
+      "thin_book": 0.3546,
+      "tight_budget": 0.614,
+      "trending_up": 1.0
+    },
+    "twap": {
+      "blackout": 1.0,
+      "deep_calm": 1.0,
+      "price_cap": 0.8,
+      "thin_book": 1.0,
+      "tight_budget": 1.0,
+      "trending_up": 1.0
+    }
+  },
+  "scenario_ids": [
+    "deep_calm",
+    "thin_book",
+    "blackout",
+    "price_cap",
+    "tight_budget",
+    "trending_up"
+  ],
+  "schema_version": 1,
+  "track": "cli"
+}

@@ -66,6 +66,40 @@ Scripted policies, no model involved. They show that the benchmark separates rea
 
 "Dump" buys everything at the first opportunity. TWAP itself fails to complete in `price_cap` and is beaten by 60 bps in `trending_up`: the benchmark leaves room for agents to do better than the baseline, not only to match it. Regenerate this table with `python scripts/baseline_table.py`.
 
+## Model results
+
+**CLI track, 6 October 2026:** six fixed scenarios × three executions × four
+models, for 72 scored executions. All four runs completed successfully with
+Inspect **0.3.276**, Python **3.11.15**, Claude Code **2.1.291** and Codex CLI
+**0.160.1**, using source commit
+`68eec1732db240562f0f300bd6d63cbed90f44d8`.
+
+| Requested CLI model | Score ± repeat SEM | Completion | IS (bps) | vs TWAP (bps) | Violations |
+|---|---:|---:|---:|---:|---:|
+| `claude_cli/claude-haiku-4-5-20251001` | 0.854 ± 0.013 | 100.0% | 20.43 | -0.92 | 0.00 |
+| `claude_cli/claude-opus-5-5` | 0.983 ± 0.010 | 98.3% | 19.05 | 0.46 | 0.00 |
+| `claude_cli/claude-sonnet-5` | 0.932 ± 0.029 | 98.3% | 19.95 | -0.44 | 0.00 |
+| `codex_cli/gpt-6-astra` | 0.824 ± 0.044 | 100.0% | 22.69 | -3.17 | 0.00 |
+
+The ± value is the standard error of three whole-suite epoch means. With only
+three repeats on six fixed markets, it does not establish generalisation or
+statistically significant differences between models. Positive `vs TWAP`
+means cheaper execution. Cost columns are unweighted means across executions
+with fills and describe only the units actually traded; completion must be
+read alongside them. Violations are mean counts per execution.
+
+These are requested CLI identifiers. Codex supplied no observed model
+identifier, so its label records the request only. Reported identifiers are
+checked for consistency, not independently verified against the hosted backend.
+This track measures the model, CLI and JSON adapter together;
+see [the protocol](docs/cli-evaluation.md).
+
+![Mean execution score across six fixed scenarios, with scripted TWAP and dump references](results/scores_by_scenario.png)
+
+See [the complete results](results/results.md), [machine-readable metrics and
+provenance](results/summary.json), and [the transcript findings](docs/findings.md).
+The figure was generated with Matplotlib 3.11.2.
+
 ## Running it
 
 ```bash
@@ -110,12 +144,9 @@ formula and 160-message limit stay the same. See
 [the evaluation protocol](docs/cli-evaluation.md) for isolation, limits and
 reproducibility details.
 
-No real-model results have been published yet. The reference table above
-contains scripted policies only.
-
 ## Design choices
 
-- **Deterministic simulator, replayed from an action log.** The market is never held in memory between tool calls. Every call rebuilds it by replaying the agent's actions from the per-sample store. This keeps the implementation stateless, makes every run exactly reproducible, and turns the Inspect transcript into a complete audit trail.
+- **Deterministic simulator, replayed from an action log.** The market is never held in memory between tool calls. Every call rebuilds it by replaying the agent's actions from the per-sample store. Replaying the recorded actions reproduces market state, fills, rejections and scores. Fresh hosted-model evaluations can produce different actions even with the same recorded configuration.
 - **Same exogenous path for agent and baseline.** Both policies face the same seeded external price path. This controls for differences between paths; the selected scenarios and seeds still affect the comparison.
 - **Violations are counted on attempts, not only on outcomes.** An order that would break a rule is rejected before it touches the book. This measures whether the agent reads and respects constraints, which matters as much as price for any agent trusted with money.
 - **Explicit synthetic market assumptions.** The scenarios include regimes where walking the book makes immediate execution expensive, alongside cases where buying early helps. Their parameters are not calibrated to a real exchange.
@@ -130,8 +161,10 @@ formatting behaviour. They should not be read as direct API results or evidence
 of profitable real-world trading.
 
 The simulator has a single asset, buy orders, visible liquidity and discrete
-time steps. It omits fees, latency, queue position and competing traders. The
-score saturates when an agent matches or beats TWAP, so the uncapped
+time steps. Only `advance()` moves simulated time; model computation and network
+waiting do not move the market. It omits fees, latency, queue position and
+competing traders. The score saturates when an agent matches or beats TWAP, so
+the uncapped
 `vs_twap_bps` metric is needed to distinguish better execution. Incomplete
 orders have cost statistics only for the quantity that actually traded.
 
@@ -148,7 +181,12 @@ The published experiment identifies its source commit, Inspect version,
 requested model identifiers and CLI versions in `results/summary.json`.
 Inspect is pinned to that version. Tests use scripted model outputs and require
 no API keys. Raw transcripts remain under the ignored `logs/` directory; only
-reviewed results and selected evidence are included in the repository.
+reviewed results and selected evidence are included in the repository. The
+recorded versions identify the evaluated protocol; they do not guarantee
+identical future responses from a hosted model.
+
+The [review notes](docs/review-notes.md) explain the implementation changes
+and validation.
 
 See [CITATION.cff](CITATION.cff) to cite the software and
 [the evaluation protocol](docs/cli-evaluation.md) for limits and provenance.
