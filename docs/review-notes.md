@@ -156,21 +156,13 @@ earlier-commit runs are excluded from the final core comparison.
 ## Final comparison validation
 
 All four final manifests completed successfully with 18 unique scenario/epoch
-pairs each, for 72 scored executions. The selected run directories are:
+pairs each, for 72 scored executions. The native Inspect logs and run manifests
+are retained locally and are not distributed with the repository or review
+archive. The published [`results/summary.json`](../results/summary.json)
+contains per-sample metrics, aggregate results, and source log basenames and
+SHA-256 hashes.
 
-| Requested CLI model | Directory under `logs/cli-core/` |
-|---|---|
-| `claude_cli/claude-haiku-4-5-20251001` | `20261006T161229045330Z` |
-| `claude_cli/claude-opus-5-5` | `20261006T165621683068Z` |
-| `claude_cli/claude-sonnet-5` | `20261006T172354900066Z` |
-| `codex_cli/gpt-6-astra` | `20261006T160748286264Z` |
-
-Each directory contains `run-manifest.json` and its native Inspect JSON log.
-The log basenames and SHA-256 hashes are recorded in
-[`results/summary.json`](../results/summary.json). These local logs remain
-excluded from Git and the review archive.
-
-A separate replay audit matched every sample's recorded actions, tool
+A separate local replay audit matched every sample's recorded actions, tool
 results, fills, scorer explanation and metrics. All 1,189 model calls retained
 their native responses. The 72 sets of public sample metrics, five aggregate
 means per model and both standard-error definitions matched the audited data.
@@ -218,9 +210,9 @@ The complete local suite at the experimental commit finished with:
 315 passed in 8.21s
 ```
 
-The core reference table is unchanged. Dependency validation passed. GitHub
-Actions is configured but has not run remotely; repository publication remains
-an owner action after review.
+The core reference table is unchanged. Dependency validation passed.
+[GitHub Actions](https://github.com/albefero/execbench/actions/workflows/tests.yml)
+runs the dependency check and tests on pushes and pull requests.
 
 ## Explaining the design in an interview
 

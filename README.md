@@ -182,10 +182,12 @@ Future extensions:
 The published experiment identifies its source commit, Inspect version,
 requested model identifiers and CLI versions in `results/summary.json`.
 Inspect is pinned to that version. Tests use scripted model outputs and require
-no API keys. Raw transcripts remain under the ignored `logs/` directory; only
-reviewed results and selected evidence are included in the repository. The
-recorded versions identify the evaluated protocol; they do not guarantee
-identical future responses from a hosted model.
+no API keys. Raw transcripts and run manifests are retained locally and are
+not distributed with the repository. Published per-sample metrics allow
+aggregate calculations to be checked; a full replay or independent transcript
+audit requires the unpublished logs. Selected excerpts appear in the
+[findings](docs/findings.md). The recorded versions identify the evaluated
+protocol; they do not guarantee identical future responses from a hosted model.
 
 The [review notes](docs/review-notes.md) explain the implementation changes
 and validation.

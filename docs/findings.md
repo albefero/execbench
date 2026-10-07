@@ -139,12 +139,13 @@ The observed examples show that satisfying hard limits and completing an order c
 
 ## Audit and provenance
 
-All 72 samples were read with Inspect's `read_eval_log`, using
-`resolve_attachments=True`. Replay reproduced the tool results, recorded
+During the local audit, all 72 samples were read with Inspect's `read_eval_log`,
+using `resolve_attachments=True`. Replay reproduced the tool results, recorded
 actions, final state, score values, scorer explanations and violation logs.
 The 72 sets of published sample metrics, each model's five aggregate means,
 and both reported standard errors were checked against the replay.
-No inconsistency was found. All 1,189 native call responses were retained:
+No inconsistency was found. All 1,189 native call responses were retained in
+the local logs:
 
 | Model | Model calls / native responses retained | Reported model ID matched |
 |---|---:|---:|
@@ -159,16 +160,14 @@ observed identifier, so all 182 calls correctly record
 track. The Claude logs contain no observed `api_retry` frames in this round;
 that does not prove the absence of all lower-level retries.
 
-Only the following completed core logs are included:
-
-- Sonnet 5: `logs/cli-core/20261006T172354900066Z/2026-10-06T17-23-55-00-00_execbench_DNvbXfeWVsRdeaxvX6HKkU.json`.
-- Opus 5.5: `logs/cli-core/20261006T165621683068Z/2026-10-06T16-56-22-00-00_execbench_VRdUtLJ3DRxEnKza2ViErr.json`.
-- Haiku 4.5: `logs/cli-core/20261006T161229045330Z/2026-10-06T16-12-29-00-00_execbench_JKpe6Yvoafg2KyDbaV9B9n.json`.
-- Codex GPT-6-astra: `logs/cli-core/20261006T160748286264Z/2026-10-06T16-07-48-00-00_execbench_Qkvk2xU6Kn37Gc4YbNXLYX.json`.
+The published [summary](../results/summary.json) contains per-sample metrics,
+aggregate results, and the source log basenames and SHA-256 hashes for the four
+completed core runs. Raw logs and run manifests are retained locally and are
+not distributed with this repository. The published metrics allow aggregate
+calculations to be checked; replaying the original actions or independently
+checking transcript quotations requires the unpublished logs.
 
 Model-call ordinals start at 1; event indices start at 0. Every quotation is
 under 40 words and comes from `ModelCall.response.rationale`, the visible
 explanation accompanying an action. It is evidence of what the agent said,
-not a measurement of its internal reasoning. Raw logs remain local and are
-excluded from Git; [summary.json](../results/summary.json) publishes the
-per-sample metrics and log hashes.
+not a measurement of its internal reasoning.
