@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 import re
 import statistics
+import sys
 
 from inspect_ai.log import read_eval_log
 
@@ -22,6 +23,7 @@ from execbench.baselines import run_policy
 from execbench.scenarios import BY_ID, SCENARIOS
 from execbench.scoring import evaluate
 
+ROOT = Path(__file__).resolve().parents[1]
 CORE_IDS = [scenario.id for scenario in SCENARIOS]
 EPOCHS = 3
 PROVENANCE_FIELDS = (
@@ -44,6 +46,35 @@ def number(value, label: str, minimum=None, maximum=None) -> float:
     require(minimum is None or value >= minimum, f"{label} is below its valid range")
     require(maximum is None or value <= maximum, f"{label} is above its valid range")
     return float(value)
+
+
+def source_files() -> list[Path]:
+    paths = [ROOT / "pyproject.toml"]
+    for directory in ("execbench", "scripts", "tests"):
+        paths.extend((ROOT / directory).glob("*.py"))
+    return sorted(paths)
+
+
+def source_fingerprint() -> str:
+    """Use the runner's source inventory so references retain the evaluated rules."""
+    digest = hashlib.sha256()
+    for path in source_files():
+        digest.update(path.relative_to(ROOT).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def validate_imported_sources() -> None:
+    """A matching checkout hash must also describe the modules actually in use."""
+    package_dir = (ROOT / "execbench").resolve()
+    for name, module in tuple(sys.modules.items()):
+        if name != "execbench" and not name.startswith("execbench."):
+            continue
+        location = getattr(module, "__file__", None)
+        require(location is not None and Path(location).resolve().is_relative_to(package_dir),
+                f"Imported {name} does not belong to the reporting checkout. "
+                "Install the evaluated checkout with 'python -m pip install -e .' "
+                "before generating results.")
 
 
 def _manifest(path: Path) -> dict:
@@ -204,8 +235,10 @@ def _model_result(run: dict, manifest: dict, manifest_path: Path) -> dict:
 
 
 def build_summary(manifest_paths: list[Path]) -> dict:
-    """Merge completed runs with one experimental protocol, irrespective of analysis HEAD."""
+    """Merge completed runs using their evaluated sources; documentation HEAD may differ."""
     require(bool(manifest_paths), "At least one completed manifest is required")
+    validate_imported_sources()
+    fingerprint = source_fingerprint()
     common = None
     versions = {}
     models = {}
@@ -216,6 +249,9 @@ def build_summary(manifest_paths: list[Path]) -> dict:
         if common is None:
             common = provenance
         require(provenance == common, "Manifests have inconsistent source/version/protocol provenance")
+        require(manifest["source_sha256"] == fingerprint,
+                "Reporting sources differ from the evaluated source fingerprint. "
+                "Use the evaluated checkout and its editable installation to regenerate historical results.")
         for provider, version in manifest["cli_versions"].items():
             require(provider not in versions or versions[provider] == version,
                     "Manifests disagree on a CLI version")
@@ -227,6 +263,8 @@ def build_summary(manifest_paths: list[Path]) -> dict:
         policy: {scenario.id: evaluate(scenario, run_policy(scenario, policy))["score"] for scenario in SCENARIOS}
         for policy in ("twap", "dump")
     }
+    validate_imported_sources()
+    require(source_fingerprint() == fingerprint, "Reporting sources changed while reading the runs")
     return {
         "schema_version": 1, "track": "cli", "provenance": {**common, "cli_versions": versions},
         "scenario_ids": CORE_IDS,

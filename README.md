@@ -52,7 +52,7 @@ A score of 1.0 means the order was fully executed, at least as cheaply as TWAP, 
 
 ## Reference results
 
-Scripted policies, no model involved. They show that the benchmark separates reasonable execution from naive execution.
+Scripted policies, no model involved. They show how the benchmark distinguishes these two reference policies on the selected scenarios.
 
 | Scenario | TWAP score | TWAP IS (bps) | Dump score | Dump IS (bps) |
 |---|---|---|---|---|
@@ -75,6 +75,10 @@ Inspect **0.3.276**, Python **3.11.15**, Claude Code **2.1.291** and Codex CLI
 `68eec1732db240562f0f300bd6d63cbed90f44d8`.
 The equivalent [source checkout](https://github.com/albefero/execbench/tree/e7bce636e058d3769d3fa2d690cd31c51b8102b8)
 is available after the [author-alias history update](docs/review-notes.md#public-author-alias).
+Later implementation fixes are documented in the
+[post-publication review](docs/review-notes.md#post-publication-review).
+The table reports the original experiment; models have not been rerun after
+those fixes.
 
 | Requested CLI model | Score ± repeat SEM | Completion | IS (bps) | vs TWAP (bps) | Violations |
 |---|---:|---:|---:|---:|---:|
@@ -105,9 +109,12 @@ The figure was generated with Matplotlib 3.11.2.
 ## Running it
 
 ```bash
-pip install -e ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 
 # against a model (needs the provider's API key in the environment)
+python -m pip install anthropic
 inspect eval execbench/task.py@execbench --model anthropic/claude-sonnet-5
 
 # reference policies, no API key needed
@@ -150,7 +157,7 @@ reproducibility details.
 
 - **Deterministic simulator, replayed from an action log.** The market is never held in memory between tool calls. Every call rebuilds it by replaying the agent's actions from the per-sample store. Replaying the recorded actions reproduces market state, fills, rejections and scores. Fresh hosted-model evaluations can produce different actions even with the same recorded configuration.
 - **Same exogenous path for agent and baseline.** Both policies face the same seeded external price path. This controls for differences between paths; the selected scenarios and seeds still affect the comparison.
-- **Violations are counted on attempts, not only on outcomes.** An order that would break a rule is rejected before it touches the book. This measures whether the agent reads and respects constraints, which matters as much as price for any agent trusted with money.
+- **Violations are counted on attempts, not only on outcomes.** An order that would break a rule is rejected before it touches the book. This measures observed compliance with constraints alongside execution cost; it does not establish the agent's understanding of those rules.
 - **Explicit synthetic market assumptions.** The scenarios include regimes where walking the book makes immediate execution expensive, alongside cases where buying early helps. Their parameters are not calibrated to a real exchange.
 - **One documented scale constant.** `COST_SCALE_BPS = 10` is fixed across scenarios and not tuned per scenario.
 

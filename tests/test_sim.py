@@ -118,6 +118,29 @@ def test_observed_remaining_budget_can_be_spent_after_fractional_fill():
     assert not sim.violations
 
 
+def test_observed_book_can_price_a_budget_limited_order_after_fractional_fill():
+    sim = MarketSim(BY_ID["tight_budget"])
+    assert sim.buy(0.12344).accepted
+    state = sim.snapshot()
+    money = state["budget_remaining"]
+    quantity = 0.0
+    # Price the next order using only the book and balance shown to the agent.
+    # Rounding up the cheapest level would underestimate its execution cost.
+    for level in state["ask_levels"]:
+        take = min(level["size"], money / level["price"])
+        quantity += take
+        money -= take * level["price"]
+        if money <= 1e-9:
+            break
+    assert 0 < quantity <= state["remaining_qty"]
+
+    result = sim.buy(quantity)
+
+    assert result.accepted
+    assert math.isclose(sim.cash_spent, sim.scenario.budget, rel_tol=0, abs_tol=1e-6)
+    assert not sim.violations
+
+
 def test_budget_is_cumulative_and_rejected_order_preserves_prior_purchase():
     scenario = replace(BY_ID["deep_calm"], budget=300.0)
     sim = MarketSim(scenario)

@@ -1,5 +1,6 @@
 """Offline checks for evaluation completeness and reproducibility metadata."""
 
+from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import shutil
@@ -18,6 +19,39 @@ runner = module_from_spec(_spec)
 _spec.loader.exec_module(runner)
 
 CORE_IDS = [scenario.id for scenario in SCENARIOS]
+
+
+def test_imported_sources_accept_the_runner_checkout():
+    import_module("execbench._registry")
+    runner.validate_imported_sources()
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    ["execbench", "execbench.task", "execbench.sim", "execbench.cli_provider", "execbench.cli_transport"],
+)
+def test_imported_sources_reject_a_module_from_another_checkout(tmp_path, monkeypatch, module_name):
+    module = import_module(module_name)
+    foreign_source = tmp_path / "other-checkout" / "execbench" / Path(module.__file__).name
+    monkeypatch.setattr(module, "__file__", str(foreign_source))
+
+    with pytest.raises(RuntimeError, match="does not belong to the runner checkout"):
+        runner.validate_imported_sources()
+
+
+def test_wrong_checkout_stops_before_cli_calls_or_manifest_creation(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+
+    def unexpected_cli(_executable):
+        pytest.fail("Import provenance must be checked before invoking a CLI")
+
+    monkeypatch.setattr(runner, "cli_version", unexpected_cli)
+    args = SimpleNamespace(
+        model=["claude_cli/test-model"], smoke=True, call_timeout=180, sample_time_limit=1200,
+    )
+    with pytest.raises(RuntimeError, match="does not belong to the runner checkout"):
+        runner.run(args)
+    assert not (tmp_path / "logs").exists()
 
 
 @pytest.fixture

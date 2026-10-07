@@ -241,7 +241,7 @@ class MarketSim:
             "steps_left_including_this_one": max(s.horizon - self.step, 0),
             "market_closed": self.closed,
             "mid_price": round(self.mid(), 4),
-            "ask_levels": [{"price": p, "size": round(q, 4)} for p, q in self.ask_levels()] if not self.closed else [],
+            "ask_levels": [{"price": p, "size": q} for p, q in self.ask_levels()] if not self.closed else [],
             "target_qty": s.target_qty,
             "filled_qty": round(self.filled_qty, 4),
             "remaining_qty": s.target_qty - self.filled_qty,

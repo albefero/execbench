@@ -4,7 +4,9 @@ import asyncio
 import json
 from pathlib import Path
 import signal
+import sys
 
+import anyio
 import pytest
 
 from execbench import cli_transport as transport
@@ -91,22 +93,49 @@ def fake_cli(monkeypatch):
             pid = 123456
             returncode = None
 
-            async def communicate(self, data):
-                nonlocal active
-                calls[-1]["stdin"] = data.decode()
-                try:
-                    await asyncio.sleep(delay)
-                    self.returncode = status
-                    return encoded, stderr
-                finally:
-                    active -= 1
+            def __init__(self):
+                self.finished = asyncio.Event()
+                self.stdin = Input()
+                self.stdout = Output(self, encoded, is_stdout=True)
+                self.stderr = Output(self, stderr, is_stdout=False)
 
             async def wait(self):
-                self.returncode = -signal.SIGKILL
+                await self.finished.wait()
                 return self.returncode
 
             def kill(self):
                 self.returncode = -signal.SIGKILL
+                self.finished.set()
+
+        class Input:
+            def write(self, data):
+                calls[-1]["stdin"] = data.decode()
+
+            async def drain(self):
+                await asyncio.sleep(0)
+
+            def close(self):
+                pass
+
+        class Output:
+            def __init__(self, process, data, *, is_stdout):
+                self.process, self.data, self.is_stdout = process, data, is_stdout
+                self.offset, self.started = 0, False
+
+            async def read(self, size):
+                nonlocal active
+                if not self.started:
+                    self.started = True
+                    try:
+                        await asyncio.sleep(delay)
+                    finally:
+                        if self.is_stdout:
+                            active -= 1
+                            self.process.returncode = status
+                            self.process.finished.set()
+                chunk = self.data[self.offset:self.offset + size]
+                self.offset += len(chunk)
+                return chunk
 
         async def create(*args, **kwargs):
             nonlocal active
@@ -737,6 +766,22 @@ def test_cancellation_kills_children_and_releases_lock(fake_cli, monkeypatch):
     assert not transport._PROCESS_LOCK.locked()
 
 
+def test_inspect_cancel_scope_cannot_interrupt_process_cleanup(fake_cli, monkeypatch):
+    calls = fake_cli(codex_events(), delay=10)
+    killed = []
+    monkeypatch.setattr(transport.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+
+    async def cancel_request():
+        with anyio.move_on_after(0.01) as scope:
+            await request()
+        assert scope.cancel_called
+
+    asyncio.run(cancel_request())
+    assert killed == [(123456, signal.SIGKILL)]
+    assert not transport._PROCESS_LOCK.locked()
+    assert not Path(calls[0]["options"]["cwd"]).exists()
+
+
 def test_unexpected_exposed_tools_are_rejected_before_result_is_used(fake_cli):
     events = claude_events()
     events[0]["tools"].append("Read")
@@ -750,3 +795,23 @@ def test_output_size_limit(fake_cli, monkeypatch):
     monkeypatch.setattr(transport, "_MAX_OUTPUT_BYTES", 20)
     with pytest.raises(transport.CLITransportError, match="size limit"):
         asyncio.run(request())
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_oversized_output_is_stopped_before_a_live_process_times_out(tmp_path, monkeypatch, stream):
+    # A local Python fixture keeps running after excessive output. No CLI or
+    # model is invoked. A post-communicate size check would instead time out.
+    monkeypatch.setattr(transport, "_MAX_OUTPUT_BYTES", 1024)
+    command = [sys.executable, "-c", (
+        f"import sys,time; sys.{stream}.buffer.write(b'x'*131072); "
+        f"sys.{stream}.flush(); time.sleep(30)"
+    )]
+    with pytest.raises(transport.CLITransportError, match="size limit"):
+        asyncio.run(transport._run(command, "", tmp_path, timeout=2))
+    assert not transport._PROCESS_LOCK.locked()
+
+    # Cleanup must leave the transport usable for the following decision.
+    output = asyncio.run(transport._run(
+        [sys.executable, "-c", "print('ready')"], "", tmp_path, timeout=2,
+    ))
+    assert output == b"ready\n"

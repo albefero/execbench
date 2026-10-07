@@ -174,8 +174,8 @@ a fully completed purchase. See [the findings](findings.md) for exact cases.
 Two generations of the report, with the manifest order reversed in the second,
 produced byte-identical JSON, Markdown and PNG files using Matplotlib 3.11.2.
 The final figure and the agreement between README, tables and JSON were also
-reviewed. The final delivery adds documentation and results to the experimental
-commit; the evaluated Python sources and dependency declaration are unchanged.
+reviewed. The original results delivery added documentation and results to the
+experimental commit without changing its Python sources or dependency declaration.
 The 30 generated and 10 held-out scenarios have not been evaluated with these
 real-model runs.
 
@@ -190,6 +190,51 @@ in the rewritten history. Its Python sources and dependency declaration are
 byte-identical; the recorded source SHA-256 remains
 `c2d0273bfe5edab04b41fc65cdc74531cd4584792e06a3554d393ac328229f27`.
 No evaluation was rerun and no scores were changed as part of this update.
+
+## Post-publication review
+
+The 7 October 2026 review checked the code, installation, published metrics,
+transcript claims and source provenance. It identified corrections for future
+evaluations and analysis:
+
+- **Executable book quantities:** displayed ask sizes were rounded to four
+  decimals. After a fractional fill, using that displayed depth to price a
+  budget-limited order could underestimate its cost and incur a violation.
+  Snapshots now expose exact remaining depth, consistent with the exact target
+  and budget remainders. A regression reproduces the original rejection.
+- **Imported source provenance:** the runner now rejects an ExecBench package
+  imported from a different checkout before invoking a CLI or creating a
+  manifest. The report generator also checks the source fingerprint against
+  the manifests before recalculating reference scores. Previously, changing
+  analysis code could change those references while retaining the old
+  experiment's provenance.
+- **CLI configuration and output:** unsupported generation options now fail
+  explicitly instead of being ignored. Output limits are enforced while the
+  subprocess streams are read, so an oversized response is stopped before the
+  process timeout.
+- **Installation:** the direct Anthropic API example now installs its optional
+  SDK and creates a virtual environment. Package licensing uses current SPDX
+  metadata. CI covers Python 3.10, the declared minimum, as well as Python 3.11.
+
+These changes postdate the frozen experiment. Replaying all 72 original action
+lists with the corrected simulator preserves every published sample metric,
+and all 12 core reference-policy action lists and metrics remain identical.
+The corrected depth observations can differ from the original transcripts;
+this replay does not establish what models would do with the new observations.
+The six core definitions, scoring formula and constants are unchanged.
+
+The four selected original logs were separately checked against the frozen
+source: all 1,189 native responses, quoted examples, failure counts and both
+SEM calculations agree with the published account. Regenerating the JSON,
+Markdown and chart from that source reproduces the published files byte for
+byte. The published artefacts and original provenance remain unchanged; no
+new real-model evaluation was performed during this review.
+
+Final local validation passed **374 tests on Python 3.11.15** and **374 tests
+on Python 3.10.20**. Dependency checks and the official CFF 1.2.0 citation
+schema validation passed. A clean wheel installation executed both core
+reference policies successfully. Python 3.10 emitted 66 deprecation warnings
+from Inspect's use of Tenacity's `initial` parameter; no tests failed.
 
 ## Delivery map
 

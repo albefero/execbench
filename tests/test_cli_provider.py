@@ -103,3 +103,50 @@ def test_unsupported_generation_settings_fail_before_calling_cli():
         asyncio.run(api.generate([], [], "auto", GenerateConfig(temperature=0)))
     with pytest.raises(ValueError, match="sequential"):
         asyncio.run(api.generate([], [], "auto", GenerateConfig(parallel_tool_calls=True)))
+
+
+@pytest.mark.parametrize("setting", [
+    {"stop_seqs": ["END"]}, {"best_of": 2}, {"frequency_penalty": 1},
+    {"presence_penalty": 1}, {"logit_bias": {42: 1}}, {"num_choices": 3},
+    {"logprobs": True}, {"top_logprobs": 2}, {"prompt_logprobs": 2},
+    {"internal_tools": True}, {"cache_prompt": False}, {"verbosity": "high"},
+    {"effort": "max"}, {"reasoning_mode": "pro"}, {"reasoning_tokens": 100},
+    {"reasoning_summary": "detailed"},
+    {"response_schema": {"name": "other", "json_schema": {"type": "object"}}},
+    {"extra_headers": {"X-Test": "fixture"}}, {"extra_body": {"other": True}},
+    {"modalities": ["image"]}, {"fallback_models": ["other-model"]}, {"batch": True},
+])
+@pytest.mark.parametrize("api_class", [ClaudeCLI, CodexCLI])
+def test_model_controls_cannot_be_silently_ignored(monkeypatch, setting, api_class):
+    async def must_not_call(*args, **kwargs):
+        raise AssertionError("Unsupported settings must fail before CLI invocation")
+
+    monkeypatch.setattr(cli_provider, "request_decision", must_not_call)
+    with pytest.raises(ValueError, match=next(iter(setting))):
+        asyncio.run(api_class("fixture").generate([], [], "auto", GenerateConfig(**setting)))
+
+
+def test_framework_controls_and_supported_reasoning_effort_remain_available(monkeypatch):
+    calls = []
+
+    async def fake_request(*args, **kwargs):
+        calls.append(kwargs)
+        return {
+            "action": "submit", "arguments": {"answer": "Done"},
+            "rationale": "Done", "observed_model": None,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+
+    monkeypatch.setattr(cli_provider, "request_decision", fake_request)
+    config = GenerateConfig(
+        max_retries=0, timeout=20, attempt_timeout=10, max_connections=1,
+        adaptive_connections=False, max_tool_output=1000, cache=False, batch=False,
+        system_message="Fixture", reasoning_history="none", reasoning_effort="high",
+        parallel_tool_calls=False,
+    )
+    output, call = asyncio.run(ClaudeCLI("fixture").generate(
+        [ChatMessageUser(content="Finish")], [ToolInfo(name="submit", description="Finish")],
+        "auto", config,
+    ))
+    assert output.message.tool_calls[0].function == "submit"
+    assert calls[0]["reasoning_effort"] == call.request["reasoning_effort"] == "high"

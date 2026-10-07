@@ -108,9 +108,21 @@ class CLIModelAPI(ModelAPI):
     ) -> tuple[ModelOutput, ModelCall]:
         if config.parallel_tool_calls is True:
             raise ValueError("ExecBench CLI providers require sequential tool calls")
-        for field in ("temperature", "top_p", "top_k", "seed", "max_tokens"):
+        # Inspect owns scheduling, timeouts, caching and conversation handling.
+        # Reject model-generation controls the CLI adapter cannot forward rather
+        # than recording settings that have no effect on the evaluated model.
+        for field in (
+            "temperature", "top_p", "top_k", "seed", "max_tokens", "stop_seqs",
+            "best_of", "frequency_penalty", "presence_penalty", "logit_bias",
+            "num_choices", "logprobs", "top_logprobs", "prompt_logprobs",
+            "internal_tools", "cache_prompt", "verbosity", "effort",
+            "reasoning_mode", "reasoning_tokens", "reasoning_summary",
+            "response_schema", "extra_headers", "extra_body", "modalities", "fallback_models",
+        ):
             if getattr(config, field, None) is not None:
                 raise ValueError(f"The CLI adapter cannot enforce {field}; leave it unset")
+        if config.batch not in (None, False):
+            raise ValueError("The CLI adapter cannot enforce batch; leave it disabled")
         messages = visible_messages(input)
         tool_specs = [tool.model_dump(mode="json", exclude_none=True) for tool in tools]
         choice = tool_choice if isinstance(tool_choice, str) else tool_choice.model_dump(mode="json")

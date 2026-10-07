@@ -48,6 +48,21 @@ def source_fingerprint() -> str:
     return digest.hexdigest()
 
 
+def validate_imported_sources() -> None:
+    """The evaluated modules must come from the checkout whose sources we record."""
+    package_dir = (ROOT / "execbench").resolve()
+    for name, module in tuple(sys.modules.items()):
+        if name != "execbench" and not name.startswith("execbench."):
+            continue
+        location = getattr(module, "__file__", None)
+        if location is None or not Path(location).resolve().is_relative_to(package_dir):
+            raise RuntimeError(
+                f"Imported {name} does not belong to the runner checkout ({ROOT}). "
+                "Install this checkout in the active Python environment with "
+                "'python -m pip install -e .' before evaluating."
+            )
+
+
 def source_commit(*, require_clean: bool) -> str | None:
     """Published runs must identify a commit containing the exact evaluated sources."""
     if not shutil.which("git"):
@@ -125,6 +140,7 @@ def run(args: argparse.Namespace) -> None:
     from execbench.scenarios import SCENARIOS
     from execbench.task import execbench
 
+    validate_imported_sources()
     models = args.model or DEFAULT_MODELS
     if len(set(models)) != len(models):
         raise ValueError("Each model may appear only once in a run")

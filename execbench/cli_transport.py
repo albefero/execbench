@@ -295,12 +295,41 @@ async def _run(command: list[str], prompt: str, directory: Path, timeout: float)
             )
         except OSError:
             raise CLITransportError("Could not start the selected CLI executable.") from None
+
+        async def write_input() -> None:
+            try:
+                process.stdin.write(prompt.encode("utf-8"))
+                await process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                # A CLI can reject its arguments before consuming stdin.
+                pass
+            finally:
+                process.stdin.close()
+
+        async def read_output(stream, *, discard: bool = False) -> bytes:
+            output = bytearray()
+            while chunk := await stream.read(64 * 1024):
+                if not discard:
+                    if len(output) + len(chunk) > _MAX_OUTPUT_BYTES:
+                        raise CLITransportError("CLI output exceeded the transport size limit.")
+                    output.extend(chunk)
+            return bytes(output)
+
+        tasks = [
+            asyncio.create_task(write_input()),
+            asyncio.create_task(read_output(process.stdout)),
+            asyncio.create_task(read_output(process.stderr)),
+            asyncio.create_task(process.wait()),
+        ]
+        operation = asyncio.gather(*tasks)
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(prompt.encode("utf-8")), timeout=timeout
-            )
+            _, stdout, stderr, _ = await asyncio.wait_for(operation, timeout=timeout)
         except BaseException as exc:
+            for task in tasks:
+                task.cancel()
             # Kill children as well: otherwise a timed-out CLI can keep generating.
+            # Do this before awaiting: a cancelled Inspect/AnyIO scope can cancel
+            # every subsequent await, not only the one that interrupted the call.
             try:
                 if os.name == "posix":
                     os.killpg(process.pid, signal.SIGKILL)
@@ -308,7 +337,29 @@ async def _run(command: list[str], prompt: str, directory: Path, timeout: float)
                     process.kill()
             except ProcessLookupError:
                 pass
-            await process.wait()
+
+            async def cleanup() -> None:
+                await asyncio.gather(operation, *tasks, return_exceptions=True)
+                # Drain the remaining pipe buffers after killing the group.
+                # Waiting without draining can hang on a paused, nonempty pipe.
+                await asyncio.gather(
+                    read_output(process.stdout, discard=True),
+                    read_output(process.stderr, discard=True),
+                    process.wait(),
+                )
+
+            cleanup_task = asyncio.create_task(cleanup())
+            cancelled = None
+            while True:
+                try:
+                    await asyncio.shield(cleanup_task)
+                    break
+                except asyncio.CancelledError as cancellation:
+                    if cleanup_task.done():
+                        raise
+                    cancelled = cancellation
+            if cancelled is not None:
+                raise cancelled
             if isinstance(exc, asyncio.TimeoutError):
                 raise CLITransportError(f"CLI request timed out after {timeout:g} seconds.") from None
             raise
@@ -316,8 +367,6 @@ async def _run(command: list[str], prompt: str, directory: Path, timeout: float)
             raise CLITransportError(
                 f"CLI exited with status {process.returncode}: {_failure_summary(stdout, stderr)}."
             )
-        if len(stdout) > _MAX_OUTPUT_BYTES or len(stderr) > _MAX_OUTPUT_BYTES:
-            raise CLITransportError("CLI output exceeded the transport size limit.")
         return stdout
     finally:
         _PROCESS_LOCK.release()

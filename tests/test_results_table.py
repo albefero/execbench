@@ -5,6 +5,8 @@ import json
 import math
 from pathlib import Path
 import statistics
+import subprocess
+import sys
 
 import pytest
 from inspect_ai.log import (
@@ -31,10 +33,11 @@ def completed_run(tmp_path):
     def create(model="claude_cli/test-model", directory="run"):
         folder = tmp_path / directory
         folder.mkdir()
+        fingerprint = reporter.source_fingerprint()
         manifest = {
             "status": "success", "track": "cli", "smoke_only": False,
             "started_at": "20261006T120000000000Z", "inspect_version": "0.3.276",
-            "python_version": "3.11.15", "git_commit": "a" * 40, "source_sha256": "b" * 64,
+            "python_version": "3.11.15", "git_commit": "a" * 40, "source_sha256": fingerprint,
             "models": [model], "epochs": 3, "scenario_ids": reporter.CORE_IDS,
             "message_limit": 160, "parallel_tool_calls": False,
             "call_timeout_seconds": 180, "sample_time_limit_seconds": 1200,
@@ -61,7 +64,7 @@ def completed_run(tmp_path):
                 dataset=EvalDataset(samples=6, sample_ids=reporter.CORE_IDS),
                 config=EvalConfig(epochs=3, message_limit=160, time_limit=1200),
                 packages={"inspect_ai": "0.3.276"},
-                metadata={"track": "cli", "smoke_only": False, "source_sha256": "b" * 64,
+                metadata={"track": "cli", "smoke_only": False, "source_sha256": fingerprint,
                           "cli_version": "test-cli 1.0"},
             ),
             plan=EvalPlan(config=GenerateConfig(parallel_tool_calls=False)), samples=samples,
@@ -82,6 +85,49 @@ def completed_run(tmp_path):
         return manifest_path, manifest, log, save
 
     return create
+
+
+def test_reporter_and_runner_fingerprint_the_same_sources():
+    spec = spec_from_file_location("cli_runner_source_check", reporter.ROOT / "scripts" / "run_cli_evals.py")
+    runner = module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    assert reporter.source_files() == runner.source_files()
+    assert reporter.source_fingerprint() == runner.source_fingerprint()
+
+
+def test_changed_scoring_cannot_relabel_references_with_historical_provenance(completed_run, tmp_path):
+    manifest, _, _, _ = completed_run()
+    checkout = tmp_path / "modified-checkout"
+    for source in reporter.source_files():
+        destination = checkout / source.relative_to(reporter.ROOT)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+    scoring = checkout / "execbench" / "scoring.py"
+    original = scoring.read_text()
+    assert "COST_SCALE_BPS = 10.0" in original
+    scoring.write_text(original.replace("COST_SCALE_BPS = 10.0", "COST_SCALE_BPS = 20.0"))
+    output = tmp_path / "must-not-be-published"
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.results_table", str(manifest), "--output-dir", str(output)],
+        cwd=checkout, text=True, capture_output=True, timeout=30,
+    )
+    assert result.returncode == 1
+    assert "Reporting sources differ" in result.stderr
+    assert "Use the evaluated checkout" in result.stderr
+    assert not output.exists()
+
+
+def test_reporter_rejects_modules_imported_from_another_checkout(completed_run, tmp_path):
+    manifest, _, _, _ = completed_run()
+    foreign_script = tmp_path / "other-checkout" / "scripts" / "results_table.py"
+    foreign_script.parent.mkdir(parents=True)
+    foreign_script.write_bytes((reporter.ROOT / "scripts" / "results_table.py").read_bytes())
+    result = subprocess.run(
+        [sys.executable, str(foreign_script), str(manifest)],
+        cwd=reporter.ROOT, text=True, capture_output=True, timeout=30,
+    )
+    assert result.returncode == 1
+    assert "does not belong to the reporting checkout" in result.stderr
 
 
 def test_aggregation_uses_six_scenario_means_not_eighteen_independent_samples(completed_run):

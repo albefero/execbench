@@ -4,7 +4,8 @@ version = "0.2.0"
 description = "ExecBench: an Inspect benchmark of AI agents executing large orders under market constraints"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["inspect-ai==0.3.276"]
 
 [project.optional-dependencies]
@@ -14,7 +15,7 @@ dev = ["pytest", "matplotlib"]
 execbench = "execbench._registry"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
