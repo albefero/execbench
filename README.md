@@ -73,6 +73,8 @@ models, for 72 scored executions. All four runs completed successfully with
 Inspect **0.3.276**, Python **3.11.15**, Claude Code **2.1.291** and Codex CLI
 **0.160.1**, using source commit
 `68eec1732db240562f0f300bd6d63cbed90f44d8`.
+The equivalent [source checkout](https://github.com/albefero/execbench/tree/e7bce636e058d3769d3fa2d690cd31c51b8102b8)
+is available after the [author-alias history update](docs/review-notes.md#public-author-alias).
 
 | Requested CLI model | Score ± repeat SEM | Completion | IS (bps) | vs TWAP (bps) | Violations |
 |---|---:|---:|---:|---:|---:|

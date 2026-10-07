@@ -187,6 +187,18 @@ commit; the evaluated Python sources and dependency declaration are unchanged.
 The 30 generated and 10 held-out scenarios have not been evaluated with these
 real-model runs.
 
+## Public author alias
+
+On 7 October 2026, repository history was rewritten to use the author's public
+alias, Albefero, in the README, licence and citation. The original experiment
+commit IDs and log hashes remain in the results as recorded provenance.
+Experimental commit `68eec1732db240562f0f300bd6d63cbed90f44d8` corresponds to
+[`e7bce636e058d3769d3fa2d690cd31c51b8102b8`](https://github.com/albefero/execbench/tree/e7bce636e058d3769d3fa2d690cd31c51b8102b8)
+in the rewritten history. Its Python sources and dependency declaration are
+byte-identical; the recorded source SHA-256 remains
+`c2d0273bfe5edab04b41fc65cdc74531cd4584792e06a3554d393ac328229f27`.
+No evaluation was rerun and no scores were changed as part of this update.
+
 ## Delivery map
 
 | Brief task | Main files | Change and rationale |
